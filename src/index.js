@@ -1,0 +1,17 @@
+import { createApp } from './app.js';
+import { createBotClient } from './bot/client.js';
+import { registerCommands } from './bot/registerCommands.js';
+import { env } from './config/env.js';
+import { logger } from './utils/logger.js';
+
+async function bootstrap() {
+  await registerCommands();
+  createBotClient();
+  const app = createApp();
+  app.listen(env.port, () => logger.info(`HTTP server listening on ${env.port}`));
+}
+
+bootstrap().catch((error) => {
+  logger.error('Failed to bootstrap Judge', error);
+  process.exit(1);
+});
