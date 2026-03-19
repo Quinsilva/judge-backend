@@ -66,20 +66,22 @@ router.post('/login', express.json(), (req, res) => {
   const token = createToken();
 
   res.cookie(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: false,
-    path: '/',
-    maxAge: 1000 * 60 * 60 * 8
-  });
+  httpOnly: true,
+  sameSite: 'none',
+  secure: true,
+  path: '/',
+  maxAge: 1000 * 60 * 60 * 8
+});
 
   return res.json({ ok: true, authenticated: true });
 });
 
 router.post('/logout', (_req, res) => {
   res.clearCookie(COOKIE_NAME, {
-    path: '/'
-  });
+  path: '/',
+  sameSite: 'none',
+  secure: true
+});
 
   return res.json({ ok: true });
 });
