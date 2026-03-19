@@ -11,7 +11,7 @@ function requireEnv(name) {
 
 const projectId = requireEnv('FIREBASE_PROJECT_ID');
 const clientEmail = requireEnv('FIREBASE_CLIENT_EMAIL');
-const privateKey = requireEnv('FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n');
+const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
 const storageBucket = requireEnv('FIREBASE_STORAGE_BUCKET');
 
 if (!admin.apps.length) {
