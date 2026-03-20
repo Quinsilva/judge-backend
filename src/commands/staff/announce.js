@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChannelType } from 'discord.js';
 import { postAnnouncement } from '../../services/announcementService.js';
+import { requireStaffRole } from '../../utils/staffAuth.js';
 
 export const data = new SlashCommandBuilder()
   .setName('announce')
@@ -25,6 +26,8 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction) {
+  const allowed = await requireStaffRole(interaction);
+  if (!allowed) return;
   const message = await postAnnouncement(interaction, {
     title: interaction.options.getString('title', true),
     summary: interaction.options.getString('summary', true),

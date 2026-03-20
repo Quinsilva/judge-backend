@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { postEvent } from '../../services/eventService.js';
+import { requireStaffRole } from '../../utils/staffAuth.js';
 
 export const data = new SlashCommandBuilder()
   .setName('event')
@@ -10,6 +11,8 @@ export const data = new SlashCommandBuilder()
   .addStringOption((option) => option.setName('end_time').setDescription('End time text'));
 
 export async function execute(interaction) {
+  const allowed = await requireStaffRole(interaction);
+  if (!allowed) return;
   const now = new Date();
   const message = await postEvent(interaction, {
     title: interaction.options.getString('title', true),

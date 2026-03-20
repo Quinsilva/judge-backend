@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { postRelease } from '../../services/releaseService.js';
+import { requireStaffRole } from '../../utils/staffAuth.js';
 
 export const data = new SlashCommandBuilder()
   .setName('release')
@@ -17,6 +18,8 @@ export const data = new SlashCommandBuilder()
   .addBooleanOption((option) => option.setName('mention_testers').setDescription('Ping QA testers?'));
 
 export async function execute(interaction) {
+  const allowed = await requireStaffRole(interaction);
+  if (!allowed) return;
   const message = await postRelease(interaction, {
     version: interaction.options.getString('version', true),
     buildName: interaction.options.getString('build_name', true),
