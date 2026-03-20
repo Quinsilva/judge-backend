@@ -5,6 +5,7 @@ import cors from 'cors';
 import adminAuthRouter from './routes/adminAuth.js';
 import adminMembersRouter from './routes/adminMembers.js';
 import adminRewardsRouter from './routes/adminRewards.js';
+import adminSubmissionsRouter from './routes/adminSubmissions.js';
 
 export function createApp() {
   const app = express();
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/admin', adminAuthRouter);
   app.use('/admin', adminMembersRouter);
   app.use('/admin', adminRewardsRouter);
+  app.use('/admin', adminSubmissionsRouter);
 
   return app;
 }
