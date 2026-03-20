@@ -8,6 +8,7 @@ import * as playtest from '../commands/staff/playtest.js';
 import * as event from '../commands/staff/event.js';
 import * as status from '../commands/staff/status.js';
 import * as link from '../commands/public/link.js';
+import * as submitmedia from '../commands/public/submitmedia.js';
 
-export const commands = [play, links, latest, events, announce, release, playtest, event, status, link];
+export const commands = [play, links, latest, events, announce, release, playtest, event, status, link, submitmedia];
 export const commandMap = new Map(commands.map((command) => [command.data.name, command]));
