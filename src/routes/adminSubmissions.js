@@ -1,3 +1,37 @@
+import express from 'express';
+import { firestore } from '../firebase/admin.js';
+import { requireAdminSession } from './adminAuth.js';
+import { getBotClient } from '../bot/botInstance.js';
+
+const router = express.Router();
+
+router.get('/submissions', requireAdminSession, async (req, res) => {
+  const guildId = String(req.query.guildId || '');
+
+  if (!guildId) {
+    return res.status(400).json({ error: 'guildId is required' });
+  }
+
+  try {
+    const snapshot = await firestore
+      .collection('guilds')
+      .doc(guildId)
+      .collection('mediaSubmissions')
+      .where('status', '==', 'pending')
+      .get();
+
+    const submissions = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    return res.json({ submissions });
+  } catch (error) {
+    console.error('GET /admin/submissions failed', error);
+    return res.status(500).json({ error: 'Failed to load submissions' });
+  }
+});
+
 router.post('/submissions/:submissionId/approve', requireAdminSession, async (req, res) => {
   const guildId = String(req.body.guildId || '');
   const { submissionId } = req.params;
@@ -92,3 +126,65 @@ router.post('/submissions/:submissionId/approve', requireAdminSession, async (re
     return res.status(500).json({ error: 'Failed to approve submission' });
   }
 });
+
+router.post('/submissions/:submissionId/reject', requireAdminSession, async (req, res) => {
+  const guildId = String(req.body.guildId || '');
+  const { submissionId } = req.params;
+
+  if (!guildId) {
+    return res.status(400).json({ error: 'guildId is required' });
+  }
+
+  try {
+    const ref = firestore
+      .collection('guilds')
+      .doc(guildId)
+      .collection('mediaSubmissions')
+      .doc(submissionId);
+
+    const snap = await ref.get();
+
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    const submission = snap.data();
+    const now = Date.now();
+
+    const client = getBotClient();
+    const guild = await client.guilds.fetch(guildId);
+    const channel = await guild.channels.fetch(submission.channelId);
+
+    if (!channel || !channel.isTextBased()) {
+      return res.status(400).json({ error: 'Submission channel not found or not text-based' });
+    }
+
+    try {
+      const originalMessage = await channel.messages.fetch(submission.messageId);
+      await originalMessage.delete().catch(() => null);
+    } catch {
+      // ignore if already deleted
+    }
+
+    await channel.send(
+      `${submission.discordDisplayName || submission.discordUsername} Submission Dismissed`
+    );
+
+    await ref.set(
+      {
+        status: 'rejected',
+        reviewedAt: now,
+        reviewedBy: 'admin-dashboard',
+        reviewDecision: 'rejected'
+      },
+      { merge: true }
+    );
+
+    return res.json({ ok: true, submission });
+  } catch (error) {
+    console.error('Reject submission failed', error);
+    return res.status(500).json({ error: 'Failed to reject submission' });
+  }
+});
+
+export default router;
