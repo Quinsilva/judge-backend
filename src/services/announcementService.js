@@ -1,40 +1,42 @@
-import { SlashCommandBuilder, ChannelType } from 'discord.js';
-import { postAnnouncement } from './services/announcementService.js';
+import { EmbedBuilder } from 'discord.js';
+import { firestore } from '../firebase/admin.js';
 
-export const data = new SlashCommandBuilder()
-  .setName('announce')
-  .setDescription('Post a polished announcement.')
-  .addStringOption((option) =>
-    option.setName('title').setDescription('Announcement title').setRequired(true)
-  )
-  .addStringOption((option) =>
-    option.setName('summary').setDescription('Short summary').setRequired(true)
-  )
-  .addStringOption((option) =>
-    option.setName('body').setDescription('Announcement body').setRequired(true)
-  )
-  .addStringOption((option) =>
-    option.setName('link').setDescription('Optional link')
-  )
-  .addChannelOption((option) =>
-    option
-      .setName('channel')
-      .setDescription('Channel to post the announcement in')
-      .addChannelTypes(ChannelType.GuildText)
-      .setRequired(false)
-  );
+export async function postAnnouncement(interaction, payload) {
+  const { title, summary, body, link, channel } = payload;
 
-export async function execute(interaction) {
-  const message = await postAnnouncement(interaction, {
-    title: interaction.options.getString('title', true),
-    summary: interaction.options.getString('summary', true),
-    body: interaction.options.getString('body', true),
-    link: interaction.options.getString('link'),
-    channel: interaction.options.getChannel('channel')
-  });
+  let targetChannel = channel;
 
-  await interaction.reply({
-    ephemeral: true,
-    content: `Announcement posted in <#${message.channelId}>.`
-  });
+  if (!targetChannel) {
+    const configSnap = await firestore
+      .collection('guilds')
+      .doc(interaction.guildId)
+      .collection('config')
+      .doc('guild')
+      .get();
+
+    const config = configSnap.exists ? configSnap.data() : {};
+    const announcementChannelId = config?.channels?.announcements?.channelId;
+
+    if (!announcementChannelId) {
+      throw new Error('No announcement channel is configured.');
+    }
+
+    targetChannel = await interaction.guild.channels.fetch(announcementChannelId);
+  }
+
+  if (!targetChannel || !targetChannel.isTextBased()) {
+    throw new Error('Selected channel is not a valid text channel.');
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(`${summary}\n\n${body}`)
+    .setTimestamp();
+
+  if (link) {
+    embed.addFields({ name: 'Link', value: link });
+  }
+
+  const message = await targetChannel.send({ embeds: [embed] });
+  return message;
 }
