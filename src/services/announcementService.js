@@ -1,5 +1,5 @@
 import { SlashCommandBuilder, ChannelType } from 'discord.js';
-import { postAnnouncement } from '../../services/announcementService.js';
+import { postAnnouncement } from '../services/announcementService.js';
 
 export const data = new SlashCommandBuilder()
   .setName('announce')
