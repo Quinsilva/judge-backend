@@ -19,4 +19,5 @@ export const env = {
 
   publicSiteUrl: process.env.PUBLIC_SITE_URL || 'https://untitledrun.web.app/',
   adminDashboardUrl: process.env.ADMIN_DASHBOARD_URL || 'http://localhost:5173',
+  staffRoleIds: requireEnv('STAFF_ROLE_IDS'),
 };
