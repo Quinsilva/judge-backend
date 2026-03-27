@@ -10,7 +10,7 @@ async function bootstrap() {
 
   // 2. Start listening IMMEDIATELY to satisfy Render's port scan
   // Ensure env.port is using process.env.PORT and binding to 0.0.0.0
-  app.listen(env.port, '0.0.0.0', () => {
+  app.listen(env.port, () => {
     logger.info(`HTTP server listening on ${env.port}`);
   });
 
