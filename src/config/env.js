@@ -12,7 +12,7 @@ export const env = {
   discordToken: requireEnv('DISCORD_TOKEN'),
   discordClientId: requireEnv('DISCORD_CLIENT_ID'),
   discordGuildId: requireEnv('DISCORD_GUILD_ID'),
-  port: process.env.PORT,
+  port: process.env.PORT || 8080,
 
   firebaseProjectId: requireEnv('FIREBASE_PROJECT_ID'),
   firebaseStorageBucket: requireEnv('FIREBASE_STORAGE_BUCKET'),
