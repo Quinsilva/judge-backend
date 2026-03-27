@@ -25,7 +25,7 @@ async function bootstrap() {
       logger.error('Failed to register commands', err);
     });
 
-    createBotClient();
+    await createBotClient();
     logger.info('Bot client created');
     
   } catch (error) {
