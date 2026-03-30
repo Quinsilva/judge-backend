@@ -18,7 +18,7 @@ export async function createBotClient() {
   });
 
   client.on(Events.Error, (error) => {
-    logger.error('Discord client error:', error);
+    logger.error('Discord client error', error);
   });
 
   client.on(Events.Warn, (warning) => {
@@ -27,15 +27,11 @@ export async function createBotClient() {
 
   setBotClient(client);
 
-  logger.info(`DISCORD_TOKEN present: ${Boolean(env.discordToken)}`);
-  logger.info(`DISCORD_CLIENT_ID present: ${Boolean(env.discordClientId)}`);
-  logger.info(`DISCORD_GUILD_ID present: ${Boolean(env.discordGuildId)}`);
-
   try {
     await client.login(env.discordToken);
     logger.info('Discord login succeeded');
   } catch (error) {
-    logger.error('Discord login failed:', error);
+    logger.error('Discord login failed', error);
     throw error;
   }
 
