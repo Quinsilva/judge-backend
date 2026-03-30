@@ -1,7 +1,30 @@
 let botClient = null;
+let botReady = false;
+let lastBotError = null;
 
 export function setBotClient(client) {
   botClient = client;
+}
+
+export function clearBotClient() {
+  botClient = null;
+  botReady = false;
+}
+
+export function markBotReady(value) {
+  botReady = value;
+}
+
+export function setLastBotError(error) {
+  lastBotError = error ?? null;
+}
+
+export function getLastBotError() {
+  return lastBotError;
+}
+
+export function isBotReady() {
+  return Boolean(botClient) && botReady && botClient.isReady();
 }
 
 export function getBotClient() {
@@ -9,7 +32,7 @@ export function getBotClient() {
     throw new Error('Bot client has not been initialized yet');
   }
 
-  if (!botClient.isReady()) {
+  if (!botReady || !botClient.isReady()) {
     throw new Error('Bot client is not ready yet');
   }
 
