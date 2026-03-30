@@ -64,10 +64,12 @@ export async function createBotClient() {
   logger.info(`DISCORD_GUILD_ID present: ${Boolean(env.discordGuildId)}`);
 
   try {
+    const token = env.discordToken.trim();
+    logger.info(`DISCORD_TOKEN length after trim: ${token.length}`);
     logger.info('About to call client.login()');
 
     await Promise.race([
-      client.login(env.discordToken),
+      client.login(token),
       new Promise((_, reject) => {
         setTimeout(() => {
           reject(new Error('Discord login timed out after 20 seconds'));
