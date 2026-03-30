@@ -6,11 +6,16 @@ import { registerSchedulers } from '../services/schedulerService.js';
 import { setBotClient } from './botInstance.js';
 
 export async function createBotClient() {
+  logger.info('createBotClient() entered');
+
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
   });
 
+  logger.info('Discord Client instance constructed');
+
   attachInteractionHandler(client);
+  logger.info('Interaction handler attached');
 
   client.once(Events.ClientReady, (readyClient) => {
     logger.info(`Judge logged in as ${readyClient.user.tag}`);
@@ -25,15 +30,55 @@ export async function createBotClient() {
     logger.warn(`Discord client warning: ${warning}`);
   });
 
+  client.on(Events.Debug, (message) => {
+    logger.info(`Discord debug: ${message}`);
+  });
+
+  client.on(Events.Invalidated, () => {
+    logger.error('Discord session invalidated');
+  });
+
+  client.on('shardReady', (shardId) => {
+    logger.info(`Shard ${shardId} ready`);
+  });
+
+  client.on('shardDisconnect', (event, shardId) => {
+    logger.error(
+      `Shard ${shardId} disconnected with code ${event.code}, reason: ${event.reason || 'unknown'}`
+    );
+  });
+
+  client.on('shardError', (error, shardId) => {
+    logger.error(`Shard ${shardId} error`, error);
+  });
+
+  client.on('shardReconnecting', (shardId) => {
+    logger.warn(`Shard ${shardId} reconnecting`);
+  });
+
   setBotClient(client);
+  logger.info('Bot client stored');
+
+  logger.info(`DISCORD_TOKEN present: ${Boolean(env.discordToken)}`);
+  logger.info(`DISCORD_CLIENT_ID present: ${Boolean(env.discordClientId)}`);
+  logger.info(`DISCORD_GUILD_ID present: ${Boolean(env.discordGuildId)}`);
 
   try {
-    await client.login(env.discordToken);
+    logger.info('About to call client.login()');
+
+    await Promise.race([
+      client.login(env.discordToken),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Discord login timed out after 20 seconds'));
+        }, 20000);
+      })
+    ]);
+
     logger.info('Discord login succeeded');
+    return client;
   } catch (error) {
     logger.error('Discord login failed', error);
     throw error;
   }
-
-  return client;
 }
