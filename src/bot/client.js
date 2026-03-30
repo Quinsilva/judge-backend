@@ -27,7 +27,7 @@ export async function createBotClient() {
 
   try {
     await Promise.race([
-      client.login(env.discordToken.trim()),
+      client.login(env.discordToken),
       new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Discord login timed out after 20 seconds')), 20000);
       })
