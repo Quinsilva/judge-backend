@@ -1,8 +1,43 @@
 import { EmbedBuilder } from 'discord.js';
 import { firestore } from '../firebase/admin.js';
 
+const THEME_COLORS = {
+  cyan: 0x00e5ff,
+  red: 0xff204e,
+  green: 0x39ff14,
+  purple: 0x9b5cff,
+};
+
+function clip(text = '', max = 1024) {
+  if (!text) return '';
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function stylizeTitle(title = '') {
+  return `⟦ ${title.toUpperCase()} ⟧`;
+}
+
+function stylizeSummary(summary = '') {
+  return [
+    '> PACKET STATUS: RECOVERED',
+    '> CHANNEL: PUBLIC BROADCAST',
+    '> SIGNAL INTEGRITY: DEGRADED',
+    '',
+    `**${clip(summary, 260)}**`,
+  ].join('\n');
+}
+
 export async function postAnnouncement(interaction, payload) {
-  const { title, summary, body, link, channel } = payload;
+  const {
+    title,
+    summary,
+    body,
+    link,
+    image,
+    thumbnail,
+    theme = 'cyan',
+    channel,
+  } = payload;
 
   let targetChannel = channel;
 
@@ -28,13 +63,34 @@ export async function postAnnouncement(interaction, payload) {
     throw new Error('Selected channel is not a valid text channel.');
   }
 
+  const color = THEME_COLORS[theme] ?? THEME_COLORS.cyan;
+
   const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(`${summary}\n\n${body}`)
+    .setColor(color)
+    .setTitle(stylizeTitle(title))
+    .setDescription(stylizeSummary(summary))
+    .addFields({
+      name: '▌ ARCHIVE LOG',
+      value: `\`\`\`${clip(body, 1000)}\`\`\``,
+    })
+    .setFooter({
+      text: 'JUDGE // OFFICIAL RUN UPDATE // TRACE ACTIVE',
+    })
     .setTimestamp();
 
+  if (thumbnail) {
+    embed.setThumbnail(thumbnail);
+  }
+
+  if (image) {
+    embed.setImage(image);
+  }
+
   if (link) {
-    embed.addFields({ name: 'Link', value: link });
+    embed.setURL(link).addFields({
+      name: '▌ ACCESS NODE',
+      value: `[OPEN TRANSMISSION](${link})`,
+    });
   }
 
   const message = await targetChannel.send({ embeds: [embed] });

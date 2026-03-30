@@ -4,7 +4,7 @@ import { requireStaffRole } from '../../utils/staffAuth.js';
 
 export const data = new SlashCommandBuilder()
   .setName('announce')
-  .setDescription('Post a polished announcement.')
+  .setDescription('Post a stylized announcement.')
   .addStringOption((option) =>
     option.setName('title').setDescription('Announcement title').setRequired(true)
   )
@@ -17,6 +17,24 @@ export const data = new SlashCommandBuilder()
   .addStringOption((option) =>
     option.setName('link').setDescription('Optional link')
   )
+  .addStringOption((option) =>
+    option.setName('image').setDescription('Optional banner image URL')
+  )
+  .addStringOption((option) =>
+    option.setName('thumbnail').setDescription('Optional thumbnail image URL')
+  )
+  .addStringOption((option) =>
+    option
+      .setName('theme')
+      .setDescription('Visual theme')
+      .addChoices(
+        { name: 'Neon Cyan', value: 'cyan' },
+        { name: 'Warning Red', value: 'red' },
+        { name: 'Toxic Green', value: 'green' },
+        { name: 'Signal Purple', value: 'purple' }
+      )
+      .setRequired(false)
+  )
   .addChannelOption((option) =>
     option
       .setName('channel')
@@ -28,11 +46,15 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction) {
   const allowed = await requireStaffRole(interaction);
   if (!allowed) return;
+
   const message = await postAnnouncement(interaction, {
     title: interaction.options.getString('title', true),
     summary: interaction.options.getString('summary', true),
     body: interaction.options.getString('body', true),
     link: interaction.options.getString('link'),
+    image: interaction.options.getString('image'),
+    thumbnail: interaction.options.getString('thumbnail'),
+    theme: interaction.options.getString('theme') ?? 'cyan',
     channel: interaction.options.getChannel('channel')
   });
 
