@@ -18,8 +18,11 @@ router.get('/members', requireAdminSession, async (req, res) => {
 
     const client = getBotClient();
 
-    // your existing member-fetch logic here
-    return res.json({ ok: true });
+    // Replace this with your existing member-fetch logic
+    return res.json({
+      ok: true,
+      botTag: client.user?.tag ?? null
+    });
   } catch (error) {
     console.error('[members] failed:', error);
 

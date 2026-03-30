@@ -12,7 +12,7 @@ export function clearBotClient() {
 }
 
 export function markBotReady(value) {
-  botReady = value;
+  botReady = Boolean(value);
 }
 
 export function setLastBotError(error) {

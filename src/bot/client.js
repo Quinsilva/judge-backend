@@ -20,6 +20,28 @@ function getReconnectDelayMs(attempt) {
   return base + jitter;
 }
 
+function scheduleReconnect() {
+  if (reconnectTimer) {
+    return;
+  }
+
+  reconnectAttempts += 1;
+  const delay = getReconnectDelayMs(reconnectAttempts);
+
+  logger.warn(`Scheduling Discord reconnect attempt ${reconnectAttempts} in ${delay}ms`);
+
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+
+    try {
+      await createBotClient(true);
+    } catch (error) {
+      logger.error('Reconnect attempt failed', error);
+      scheduleReconnect();
+    }
+  }, delay);
+}
+
 function attachLifecycleLogging(client) {
   client.once(Events.ClientReady, (readyClient) => {
     reconnectAttempts = 0;
@@ -43,6 +65,7 @@ function attachLifecycleLogging(client) {
     logger.error('Discord session invalidated');
     markBotReady(false);
     setLastBotError(new Error('Discord session invalidated'));
+    scheduleReconnect();
   });
 
   client.on('shardReady', (shardId) => {
@@ -51,9 +74,11 @@ function attachLifecycleLogging(client) {
 
   client.on('shardDisconnect', (event, shardId) => {
     markBotReady(false);
+
     const error = new Error(
       `Shard ${shardId} disconnected with code ${event.code}, reason: ${event.reason || 'unknown'}`
     );
+
     logger.error(error.message);
     setLastBotError(error);
     scheduleReconnect();
@@ -74,28 +99,6 @@ function attachLifecycleLogging(client) {
     markBotReady(true);
     logger.info(`Shard ${shardId} resumed with ${replayedEvents} replayed events`);
   });
-}
-
-function scheduleReconnect() {
-  if (reconnectTimer) {
-    return;
-  }
-
-  reconnectAttempts += 1;
-  const delay = getReconnectDelayMs(reconnectAttempts);
-
-  logger.warn(`Scheduling Discord reconnect attempt ${reconnectAttempts} in ${delay}ms`);
-
-  reconnectTimer = setTimeout(async () => {
-    reconnectTimer = null;
-
-    try {
-      await createBotClient(true);
-    } catch (error) {
-      logger.error('Reconnect attempt failed', error);
-      scheduleReconnect();
-    }
-  }, delay);
 }
 
 export async function createBotClient(isReconnect = false) {
@@ -123,7 +126,14 @@ export async function createBotClient(isReconnect = false) {
     try {
       logger.info(isReconnect ? 'Attempting Discord reconnect...' : 'Attempting Discord login...');
 
-      await client.login(token);
+      await Promise.race([
+        client.login(token),
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Discord login timed out after 20 seconds'));
+          }, 20000);
+        })
+      ]);
 
       setBotClient(client);
       logger.info('Discord login promise resolved');
