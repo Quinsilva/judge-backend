@@ -15,15 +15,14 @@ let reconnectTimer = null;
 let reconnectAttempts = 0;
 
 function getReconnectDelayMs(attempt) {
-  const base = Math.min(30000, 2000 * Math.max(1, attempt));
-  const jitter = Math.floor(Math.random() * 1000);
-  return base + jitter;
+  // 15s, 30s, 60s, 120s, 240s, max 5 min
+  const delay = Math.min(300000, 15000 * Math.pow(2, Math.max(0, attempt - 1)));
+  const jitter = Math.floor(Math.random() * 2000);
+  return delay + jitter;
 }
 
 function scheduleReconnect() {
-  if (reconnectTimer) {
-    return;
-  }
+  if (reconnectTimer || connectPromise) return;
 
   reconnectAttempts += 1;
   const delay = getReconnectDelayMs(reconnectAttempts);
@@ -62,57 +61,52 @@ function attachLifecycleLogging(client) {
   });
 
   client.on(Events.Invalidated, () => {
-    logger.error('Discord session invalidated');
+    const error = new Error('Discord session invalidated');
+    logger.error(error.message);
     markBotReady(false);
-    setLastBotError(new Error('Discord session invalidated'));
+    setLastBotError(error);
+    clearBotClient();
     scheduleReconnect();
   });
 
-  client.on('shardReady', (shardId) => {
-    logger.info(`Shard ${shardId} ready`);
-  });
-
   client.on('shardDisconnect', (event, shardId) => {
-    markBotReady(false);
-
     const error = new Error(
       `Shard ${shardId} disconnected with code ${event.code}, reason: ${event.reason || 'unknown'}`
     );
-
     logger.error(error.message);
+    markBotReady(false);
     setLastBotError(error);
+    clearBotClient();
     scheduleReconnect();
   });
 
   client.on('shardError', (error, shardId) => {
-    markBotReady(false);
     logger.error(`Shard ${shardId} error`, error);
+    markBotReady(false);
     setLastBotError(error);
   });
 
   client.on('shardReconnecting', (shardId) => {
-    markBotReady(false);
     logger.warn(`Shard ${shardId} reconnecting`);
+    markBotReady(false);
   });
 
   client.on('shardResume', (shardId, replayedEvents) => {
-    markBotReady(true);
     logger.info(`Shard ${shardId} resumed with ${replayedEvents} replayed events`);
+    markBotReady(true);
+    setLastBotError(null);
   });
 }
 
 export async function createBotClient(isReconnect = false) {
-  if (connectPromise) {
-    return connectPromise;
-  }
+  if (connectPromise) return connectPromise;
 
   connectPromise = (async () => {
+    markBotReady(false);
+
     if (isReconnect) {
       clearBotClient();
     }
-
-    markBotReady(false);
-    setLastBotError(null);
 
     const client = new Client({
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
@@ -121,19 +115,12 @@ export async function createBotClient(isReconnect = false) {
     attachInteractionHandler(client);
     attachLifecycleLogging(client);
 
-    const token = env.discordToken.trim();
-
     try {
+      const token = env.discordToken.trim();
+
       logger.info(isReconnect ? 'Attempting Discord reconnect...' : 'Attempting Discord login...');
 
-      await Promise.race([
-        client.login(token),
-        new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('Discord login timed out after 20 seconds'));
-          }, 20000);
-        })
-      ]);
+      await client.login(token);
 
       setBotClient(client);
       logger.info('Discord login promise resolved');
@@ -143,6 +130,7 @@ export async function createBotClient(isReconnect = false) {
       clearBotClient();
       setLastBotError(error);
       logger.error('Discord login failed', error);
+      scheduleReconnect();
       throw error;
     } finally {
       connectPromise = null;

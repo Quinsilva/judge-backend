@@ -31,7 +31,6 @@ async function bootstrap() {
 
   try {
     await createBotClient();
-    logger.info('Bot client initialization kicked off successfully');
   } catch (error) {
     logger.error('Initial Discord startup failed', error);
   }
