@@ -5,12 +5,12 @@ import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 
 async function bootstrap() {
-  await registerCommands();
-  createBotClient();
   const app = createApp();
   app.listen(env.port, '0.0.0.0', () => {
     logger.info(`HTTP server listening on ${env.port}`);
   });
+  await registerCommands();
+  createBotClient();
 }
 
 bootstrap().catch((error) => {
