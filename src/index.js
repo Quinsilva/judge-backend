@@ -8,7 +8,9 @@ async function bootstrap() {
   await registerCommands();
   createBotClient();
   const app = createApp();
-  app.listen(env.port, () => logger.info(`HTTP server listening on ${env.port}`));
+  app.listen(env.port, '0.0.0.0', () => {
+    logger.info(`HTTP server listening on ${env.port}`);
+  });
 }
 
 bootstrap().catch((error) => {
