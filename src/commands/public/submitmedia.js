@@ -1,25 +1,31 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { firestore } from '../../firebase/admin.js';
 
+const ALLOWED_CONTENT_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif'
+]);
+
 export const data = new SlashCommandBuilder()
   .setName('submitmedia')
-  .setDescription('Submit one of your media messages for admin approval')
-  .addStringOption((option) =>
+  .setDescription('Submit media directly for admin approval')
+  .addAttachmentOption((option) =>
     option
-      .setName('message_id')
-      .setDescription('The message ID containing your media')
+      .setName('file')
+      .setDescription('Upload a PNG, JPG, or GIF')
       .setRequired(true)
   )
-  .addChannelOption((option) =>
+  .addStringOption((option) =>
     option
-      .setName('channel')
-      .setDescription('The channel containing the message')
-      .setRequired(true)
+      .setName('caption')
+      .setDescription('Optional caption for your submission')
+      .setRequired(false)
   );
 
 export async function execute(interaction) {
-  const messageId = interaction.options.getString('message_id', true);
-  const channel = interaction.options.getChannel('channel', true);
+  const file = interaction.options.getAttachment('file', true);
+  const caption = interaction.options.getString('caption') || '';
 
   try {
     const configSnap = await firestore
@@ -30,74 +36,62 @@ export async function execute(interaction) {
       .get();
 
     const config = configSnap.exists ? configSnap.data() : {};
-    const approvedChannelIds = Array.isArray(config.approvedChannelIds)
-      ? config.approvedChannelIds
-      : [];
+    const submissionsEnabled =
+      config.mediaSubmissionsEnabled !== false;
 
-    if (!approvedChannelIds.includes(channel.id)) {
+    if (!submissionsEnabled) {
       await interaction.reply({
         ephemeral: true,
-        content: 'That channel is not configured for media submissions.'
+        content: 'Media submissions are not enabled for this server.'
       });
       return;
     }
 
-    const message = await channel.messages.fetch(messageId);
-
-    if (!message) {
+    if (!file.contentType || !ALLOWED_CONTENT_TYPES.has(file.contentType)) {
       await interaction.reply({
         ephemeral: true,
-        content: 'Message not found.'
+        content: 'Only PNG, JPG, and GIF files are allowed.'
       });
       return;
     }
 
-    if (message.author.id !== interaction.user.id) {
-      await interaction.reply({
-        ephemeral: true,
-        content: 'You can only submit your own media messages.'
-      });
-      return;
-    }
-
-    const attachmentUrls = [...message.attachments.values()].map((a) => a.url);
-
-    if (!attachmentUrls.length) {
-      await interaction.reply({
-        ephemeral: true,
-        content: 'That message has no media attachments.'
-      });
-      return;
-    }
-
-    const submissionId = `${channel.id}-${message.id}`;
-    const now = Date.now();
-
-    await firestore
+    const submissionRef = firestore
       .collection('guilds')
       .doc(interaction.guildId)
       .collection('mediaSubmissions')
-      .doc(submissionId)
-      .set(
-        {
-          submissionId,
-          guildId: interaction.guildId,
-          channelId: channel.id,
-          messageId: message.id,
-          discordUserId: message.author.id,
-          discordUsername: message.author.username,
-          discordDisplayName:
-            message.member?.displayName || message.author.username,
-          content: message.content || '',
-          attachmentUrls,
-          status: 'pending',
-          createdAt: now,
-          reviewedAt: null,
-          reviewedBy: null,
-          reviewDecision: null
-        },
-        { merge: true }
-      );
+      .doc();
+
+    const now = Date.now();
+
+    await submissionRef.set(
+      {
+        submissionId: submissionRef.id,
+        guildId: interaction.guildId,
+        channelId: interaction.channelId,
+        messageId: null,
+        discordUserId: interaction.user.id,
+        discordUsername: interaction.user.username,
+        discordDisplayName:
+          interaction.member?.displayName ||
+          interaction.user.globalName ||
+          interaction.user.username,
+        content: caption,
+        attachmentUrls: [file.url],
+        attachmentMeta: [
+          {
+            name: file.name,
+            contentType: file.contentType,
+            size: file.size
+          }
+        ],
+        status: 'pending',
+        createdAt: now,
+        reviewedAt: null,
+        reviewedBy: null,
+        reviewDecision: null
+      },
+      { merge: true }
+    );
 
     await interaction.reply({
       ephemeral: true,
@@ -106,9 +100,11 @@ export async function execute(interaction) {
   } catch (error) {
     console.error('submitmedia failed', error);
 
-    await interaction.reply({
-      ephemeral: true,
-      content: 'Failed to queue that message for review.'
-    });
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        ephemeral: true,
+        content: 'Failed to queue your submission for review.'
+      });
+    }
   }
 }
