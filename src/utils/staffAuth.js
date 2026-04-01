@@ -12,7 +12,6 @@ export function getStaffRoleIds() {
 export function memberHasStaffRole(interaction) {
   const allowedRoleIds = getStaffRoleIds();
 
-  // IMPORTANT: allow all if no roles configured (prevents lockout)
   if (!allowedRoleIds.length) {
     return true;
   }
@@ -30,10 +29,18 @@ export async function requireStaffRole(interaction) {
     return true;
   }
 
-  await interaction.reply({
-    ephemeral: true,
+  const payload = {
     content: 'You are not authorized to use this staff command.'
-  });
+  };
+
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply(payload);
+  } else {
+    await interaction.reply({
+      ...payload,
+      ephemeral: true
+    });
+  }
 
   return false;
 }

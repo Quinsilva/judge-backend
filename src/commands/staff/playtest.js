@@ -72,10 +72,10 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction) {
   try {
+    await interaction.deferReply({ ephemeral: true });
+
     const allowed = await requireStaffRole(interaction);
     if (!allowed) return;
-
-    await interaction.deferReply({ ephemeral: true });
 
     const autoCreated = [];
 
