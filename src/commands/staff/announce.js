@@ -26,7 +26,7 @@ export const data = new SlashCommandBuilder()
   .addStringOption((option) =>
     option
       .setName('theme')
-      .setDescription('Visual theme')
+      .setDescription('Optional overlay tint')
       .addChoices(
         { name: 'Neon Cyan', value: 'cyan' },
         { name: 'Warning Red', value: 'red' },
@@ -39,27 +39,48 @@ export const data = new SlashCommandBuilder()
     option
       .setName('channel')
       .setDescription('Channel to post the announcement in')
-      .addChannelTypes(ChannelType.GuildText)
+      .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
       .setRequired(false)
   );
 
 export async function execute(interaction) {
-  const allowed = await requireStaffRole(interaction);
-  if (!allowed) return;
+  try {
+    await interaction.deferReply({ ephemeral: true });
 
-  const message = await postAnnouncement(interaction, {
-    title: interaction.options.getString('title', true),
-    summary: interaction.options.getString('summary', true),
-    body: interaction.options.getString('body', true),
-    link: interaction.options.getString('link'),
-    image: interaction.options.getString('image'),
-    thumbnail: interaction.options.getString('thumbnail'),
-    theme: interaction.options.getString('theme') ?? 'cyan',
-    channel: interaction.options.getChannel('channel')
-  });
+    const allowed = await requireStaffRole(interaction);
+    if (!allowed) return;
 
-  await interaction.reply({
-    ephemeral: true,
-    content: `Announcement posted in <#${message.channelId}>.`
-  });
+    const result = await postAnnouncement(interaction, {
+      title: interaction.options.getString('title', true),
+      summary: interaction.options.getString('summary', true),
+      body: interaction.options.getString('body', true),
+      link: interaction.options.getString('link'),
+      image: interaction.options.getString('image'),
+      thumbnail: interaction.options.getString('thumbnail'),
+      theme: interaction.options.getString('theme') ?? 'cyan',
+      channel: interaction.options.getChannel('channel')
+    });
+
+    await interaction.editReply({
+      content: [
+        `Announcement posted in <#${result.message.channelId}>.`,
+        result.usedImage
+          ? 'Digital announcement card uploaded successfully.'
+          : 'Announcement posted with embed-only fallback.'
+      ].join('\n')
+    });
+  } catch (error) {
+    console.error('Error running /announce:', error);
+
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({
+        content: error.message || 'Something went wrong while posting the announcement.'
+      }).catch(() => {});
+    } else {
+      await interaction.reply({
+        ephemeral: true,
+        content: error.message || 'Something went wrong while posting the announcement.'
+      }).catch(() => {});
+    }
+  }
 }

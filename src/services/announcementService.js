@@ -1,98 +1,65 @@
-import { EmbedBuilder } from 'discord.js';
-import { firestore } from '../firebase/admin.js';
+import { AttachmentBuilder, ChannelType } from 'discord.js';
+import { announcementEmbed } from '../embeds/announcementEmbed.js';
 
-const THEME_COLORS = {
-  cyan: 0x00e5ff,
-  red: 0xff204e,
-  green: 0x39ff14,
-  purple: 0x9b5cff,
-};
-
-function clip(text = '', max = 1024) {
-  if (!text) return '';
-  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+async function tryRenderAnnouncementCard(payload) {
+  try {
+    const mod = await import('../renderers/renderAnnouncementCard.js');
+    return await mod.renderAnnouncementCard(payload);
+  } catch (error) {
+    console.error('Announcement card render failed:', error);
+    return null;
+  }
 }
 
-function stylizeTitle(title = '') {
-  return `⟦ ${title.toUpperCase()} ⟧`;
-}
-
-function stylizeSummary(summary = '') {
-  return [
-    '> PACKET STATUS: RECOVERED',
-    '> CHANNEL: PUBLIC BROADCAST',
-    '> SIGNAL INTEGRITY: DEGRADED',
-    '',
-    `**${clip(summary, 260)}**`,
-  ].join('\n');
+function resolveTargetChannel(interaction, selectedChannel) {
+  return selectedChannel || interaction.channel;
 }
 
 export async function postAnnouncement(interaction, payload) {
-  const {
-    title,
-    summary,
-    body,
-    link,
-    image,
-    thumbnail,
-    theme = 'cyan',
-    channel,
-  } = payload;
-
-  let targetChannel = channel;
+  const targetChannel = resolveTargetChannel(interaction, payload.channel);
 
   if (!targetChannel) {
-    const configSnap = await firestore
-      .collection('guilds')
-      .doc(interaction.guildId)
-      .collection('config')
-      .doc('guild')
-      .get();
+    throw new Error('No target channel was available for this announcement.');
+  }
 
-    const config = configSnap.exists ? configSnap.data() : {};
-    const announcementChannelId = config?.channels?.announcements?.channelId;
+  if (
+    targetChannel.type !== ChannelType.GuildText &&
+    targetChannel.type !== ChannelType.GuildAnnouncement
+  ) {
+    throw new Error('Announcements can only be posted to a text or announcement channel.');
+  }
 
-    if (!announcementChannelId) {
-      throw new Error('No announcement channel is configured.');
+  const embed = announcementEmbed(payload);
+
+  if (payload.thumbnail) {
+    embed.setThumbnail(payload.thumbnail);
+  }
+
+  if (payload.image) {
+    embed.setImage(payload.image);
+  }
+
+  const imageBuffer = await tryRenderAnnouncementCard(payload);
+
+  if (imageBuffer) {
+    try {
+      const file = new AttachmentBuilder(imageBuffer, { name: 'announcement-card.png' });
+      embed.setImage('attachment://announcement-card.png');
+
+      const message = await targetChannel.send({
+        embeds: [embed],
+        files: [file]
+      });
+
+      return { message, usedImage: true };
+    } catch (error) {
+      console.error('Announcement send with image failed, falling back to embed-only:', error);
     }
-
-    targetChannel = await interaction.guild.channels.fetch(announcementChannelId);
   }
 
-  if (!targetChannel || !targetChannel.isTextBased()) {
-    throw new Error('Selected channel is not a valid text channel.');
-  }
+  const fallbackMessage = await targetChannel.send({
+    embeds: [embed]
+  });
 
-  const color = THEME_COLORS[theme] ?? THEME_COLORS.cyan;
-
-  const embed = new EmbedBuilder()
-    .setColor(color)
-    .setTitle(stylizeTitle(title))
-    .setDescription(stylizeSummary(summary))
-    .addFields({
-      name: '▌ ARCHIVE LOG',
-      value: `\`\`\`${clip(body, 1000)}\`\`\``,
-    })
-    .setFooter({
-      text: 'JUDGE // OFFICIAL RUN UPDATE // TRACE ACTIVE',
-    })
-    .setTimestamp();
-
-  if (thumbnail) {
-    embed.setThumbnail(thumbnail);
-  }
-
-  if (image) {
-    embed.setImage(image);
-  }
-
-  if (link) {
-    embed.setURL(link).addFields({
-      name: '▌ ACCESS NODE',
-      value: `[OPEN TRANSMISSION](${link})`,
-    });
-  }
-
-  const message = await targetChannel.send({ embeds: [embed] });
-  return message;
+  return { message: fallbackMessage, usedImage: false };
 }
