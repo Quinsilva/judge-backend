@@ -10,8 +10,8 @@ const ASSET_DIR = path.join(__dirname, '../assets/ui');
 const FRAME_PATH = path.join(ASSET_DIR, 'release-frame.png');
 const BG_PATH = path.join(ASSET_DIR, 'release-bg.png');
 
-const WIDTH = 1600;
-const HEIGHT = 900;
+const WIDTH = 1200;
+const HEIGHT = 675;
 
 const COLORS = {
   white: '#F5F7FF',
