@@ -75,20 +75,20 @@ function drawWrappedList(ctx, items, x, y, maxWidth, lineHeight, bulletColor, te
   const visible = items.slice(0, maxItems);
 
   for (const item of visible) {
-    ctx.font = '700 32px sans-serif';
+    ctx.font = '700 24px sans-serif';
     ctx.fillStyle = bulletColor;
     ctx.fillText('•', x, cursorY);
 
-    ctx.font = '500 30px sans-serif';
+    ctx.font = '500 22px sans-serif';
     ctx.fillStyle = textColor;
 
-    const wrapped = wrapText(ctx, item, maxWidth - 36);
+    const wrapped = wrapText(ctx, item, maxWidth - 28);
     for (const line of wrapped) {
-      ctx.fillText(line, x + 36, cursorY);
+      ctx.fillText(line, x + 28, cursorY);
       cursorY += lineHeight;
     }
 
-    cursorY += 6;
+    cursorY += 4;
   }
 
   return cursorY;
@@ -116,82 +116,94 @@ export async function renderReleaseCard(data) {
   const bg = await loadImage(BG_PATH);
   const frame = await loadImage(FRAME_PATH);
 
+  // Background
   ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
+  // Darken for readability
   const overlay = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-  overlay.addColorStop(0, 'rgba(4, 8, 18, 0.35)');
-  overlay.addColorStop(1, 'rgba(4, 8, 18, 0.55)');
+  overlay.addColorStop(0, 'rgba(4, 8, 18, 0.25)');
+  overlay.addColorStop(1, 'rgba(4, 8, 18, 0.45)');
   ctx.fillStyle = overlay;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  const left = 170;
-  const top = 185;
-  const contentWidth = 1180;
+  // IMPORTANT:
+  // Draw the frame BEFORE text because your frame center is black, not transparent.
+  ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
 
+  // Content bounds
+  const left = 135;
+  const top = 120;
+  const contentWidth = 930;
+
+  // Title
   const fullTitle = `Release ${data.version} • ${data.buildName}`;
-  const titleSize = fitText(ctx, fullTitle, 760, 58);
+  const titleSize = fitText(ctx, fullTitle, 650, 40);
 
   ctx.font = `800 ${titleSize}px sans-serif`;
   ctx.fillStyle = COLORS.white;
   ctx.fillText(`Release ${data.version}`, left, top);
 
   const versionWidth = ctx.measureText(`Release ${data.version}`).width;
-  ctx.font = `700 ${Math.max(titleSize - 2, 24)}px sans-serif`;
+  ctx.font = `700 ${Math.max(titleSize - 2, 20)}px sans-serif`;
   ctx.fillStyle = COLORS.cyan;
   ctx.fillText(` • ${data.buildName}`, left + versionWidth, top);
 
+  // Status chip
   const chipText = String(data.status || 'dev').toUpperCase();
-  ctx.font = '800 28px sans-serif';
-  const chipPadX = 18;
+  ctx.font = '800 20px sans-serif';
+  const chipPadX = 14;
   const chipW = ctx.measureText(chipText).width + chipPadX * 2;
-  const chipH = 46;
+  const chipH = 34;
   const chipX = left;
-  const chipY = top + 36;
+  const chipY = top + 18;
 
-  ctx.fillStyle = 'rgba(10, 22, 44, 0.82)';
+  ctx.fillStyle = 'rgba(10, 22, 44, 0.9)';
   ctx.beginPath();
-  ctx.roundRect(chipX, chipY, chipW, chipH, 12);
+  ctx.roundRect(chipX, chipY, chipW, chipH, 10);
   ctx.fill();
 
   ctx.strokeStyle = statusColor(data.status);
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(chipX, chipY, chipW, chipH, 12);
+  ctx.roundRect(chipX, chipY, chipW, chipH, 10);
   ctx.stroke();
 
   ctx.fillStyle = statusColor(data.status);
-  ctx.fillText(chipText, chipX + chipPadX, chipY + 31);
+  ctx.fillText(chipText, chipX + chipPadX, chipY + 23);
 
+  // Divider
   ctx.strokeStyle = COLORS.line;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(left, chipY + chipH + 28);
-  ctx.lineTo(left + 700, chipY + chipH + 28);
+  ctx.moveTo(left, chipY + chipH + 18);
+  ctx.lineTo(left + 500, chipY + chipH + 18);
   ctx.stroke();
 
-  const highlightsY = chipY + chipH + 56;
-  drawPanel(ctx, left - 16, highlightsY - 40, contentWidth - 140, 245);
+  // Highlights
+  const highlightsY = chipY + chipH + 42;
+  drawPanel(ctx, left - 10, highlightsY - 28, contentWidth, 150);
 
-  ctx.font = '800 36px sans-serif';
+  ctx.font = '800 26px sans-serif';
   ctx.fillStyle = COLORS.yellow;
   ctx.fillText('✦ Highlights', left, highlightsY);
 
   const nextY = drawWrappedList(
     ctx,
     Array.isArray(data.highlights) ? data.highlights : [],
-    left + 8,
-    highlightsY + 56,
-    contentWidth - 200,
-    42,
+    left + 4,
+    highlightsY + 38,
+    contentWidth - 40,
+    30,
     COLORS.cyan,
     COLORS.white,
-    5
+    4
   );
 
-  const issuesTitleY = Math.max(nextY + 22, highlightsY + 190);
-  drawPanel(ctx, left - 16, issuesTitleY - 40, contentWidth - 140, 150);
+  // Known issues
+  const issuesTitleY = Math.max(nextY + 12, highlightsY + 135);
+  drawPanel(ctx, left - 10, issuesTitleY - 28, contentWidth, 100);
 
-  ctx.font = '800 34px sans-serif';
+  ctx.font = '800 24px sans-serif';
   ctx.fillStyle = COLORS.orange;
   ctx.fillText('⚠ Known Issues', left, issuesTitleY);
 
@@ -202,39 +214,39 @@ export async function renderReleaseCard(data) {
   const afterIssuesY = drawWrappedList(
     ctx,
     issues,
-    left + 8,
-    issuesTitleY + 52,
-    contentWidth - 200,
-    40,
+    left + 4,
+    issuesTitleY + 34,
+    contentWidth - 40,
+    28,
     COLORS.orange,
     COLORS.white,
-    3
+    2
   );
 
-  const ctaY = afterIssuesY + 18;
-  drawPanel(ctx, left - 16, ctaY - 40, contentWidth - 140, 120);
+  // CTA
+  const ctaY = afterIssuesY + 10;
+  drawPanel(ctx, left - 10, ctaY - 28, contentWidth, 90);
 
-  ctx.font = '800 34px sans-serif';
+  ctx.font = '800 24px sans-serif';
   ctx.fillStyle = COLORS.cyan;
   ctx.fillText('📣 Next Step', left, ctaY);
 
-  ctx.font = '500 30px sans-serif';
+  ctx.font = '500 22px sans-serif';
   ctx.fillStyle = COLORS.white;
   const ctaLines = wrapText(
     ctx,
     data.callToAction || 'Share feedback in #alpha-feedback.',
-    contentWidth - 180
+    contentWidth - 30
   );
 
   ctaLines.slice(0, 2).forEach((line, index) => {
-    ctx.fillText(line, left + 8, ctaY + 48 + index * 38);
+    ctx.fillText(line, left + 4, ctaY + 34 + index * 28);
   });
 
-  ctx.font = '600 24px sans-serif';
+  // Footer
+  ctx.font = '600 18px sans-serif';
   ctx.fillStyle = COLORS.soft;
-  ctx.fillText('UR-Judge System', WIDTH - 360, HEIGHT - 52);
-
-  ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
+  ctx.fillText('UR-Judge System', WIDTH - 210, HEIGHT - 28);
 
   return canvas.toBuffer('image/png');
 }
