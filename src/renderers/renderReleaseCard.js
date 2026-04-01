@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,9 +10,6 @@ const ASSET_DIR = path.join(__dirname, '../assets/ui');
 const FRAME_PATH = path.join(ASSET_DIR, 'release-frame.png');
 const BG_PATH = path.join(ASSET_DIR, 'release-bg.png');
 
-// Optional: register a custom font if you add one later
-// GlobalFonts.registerFromPath(path.join(ASSET_DIR, 'Orbitron-Bold.ttf'), 'Orbitron');
-
 const WIDTH = 1600;
 const HEIGHT = 900;
 
@@ -20,19 +17,21 @@ const COLORS = {
   white: '#F5F7FF',
   soft: '#B8C7E6',
   cyan: '#84E9FF',
-  neonBlue: '#37C8FF',
   green: '#7DFFB3',
   orange: '#FFAA4D',
-  red: '#FF7272',
   yellow: '#FFD36B',
   line: 'rgba(255,255,255,0.12)',
   panel: 'rgba(9, 16, 33, 0.72)'
 };
 
-function fitText(ctx, text, maxWidth, startSize, weight = '700', family = 'sans-serif') {
+async function ensureAsset(filePath) {
+  await fs.access(filePath);
+}
+
+function fitText(ctx, text, maxWidth, startSize) {
   let size = startSize;
   while (size > 16) {
-    ctx.font = `${weight} ${size}px ${family}`;
+    ctx.font = `800 ${size}px sans-serif`;
     if (ctx.measureText(text).width <= maxWidth) return size;
     size -= 2;
   }
@@ -58,22 +57,34 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
+function drawPanel(ctx, x, y, w, h) {
+  ctx.fillStyle = COLORS.panel;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 18);
+  ctx.fill();
+
+  ctx.strokeStyle = COLORS.line;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 18);
+  ctx.stroke();
+}
+
 function drawWrappedList(ctx, items, x, y, maxWidth, lineHeight, bulletColor, textColor, maxItems = 5) {
   let cursorY = y;
   const visible = items.slice(0, maxItems);
 
   for (const item of visible) {
-    const bullet = '•';
-    ctx.font = `700 32px sans-serif`;
+    ctx.font = '700 32px sans-serif';
     ctx.fillStyle = bulletColor;
-    ctx.fillText(bullet, x, cursorY);
+    ctx.fillText('•', x, cursorY);
 
-    ctx.font = `500 30px sans-serif`;
+    ctx.font = '500 30px sans-serif';
     ctx.fillStyle = textColor;
 
     const wrapped = wrapText(ctx, item, maxWidth - 36);
-    for (let i = 0; i < wrapped.length; i += 1) {
-      ctx.fillText(wrapped[i], x + 36, cursorY);
+    for (const line of wrapped) {
+      ctx.fillText(line, x + 36, cursorY);
       cursorY += lineHeight;
     }
 
@@ -95,24 +106,6 @@ function statusColor(status) {
   }
 }
 
-function drawPanel(ctx, x, y, w, h) {
-  ctx.fillStyle = COLORS.panel;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 18);
-  ctx.fill();
-
-  ctx.strokeStyle = COLORS.line;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 18);
-  ctx.stroke();
-}
-
-async function ensureAsset(filePath) {
-  await fs.access(filePath);
-  return filePath;
-}
-
 export async function renderReleaseCard(data) {
   await ensureAsset(FRAME_PATH);
   await ensureAsset(BG_PATH);
@@ -123,24 +116,21 @@ export async function renderReleaseCard(data) {
   const bg = await loadImage(BG_PATH);
   const frame = await loadImage(FRAME_PATH);
 
-  // Background
   ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
-  // Darken for legibility
   const overlay = ctx.createLinearGradient(0, 0, 0, HEIGHT);
   overlay.addColorStop(0, 'rgba(4, 8, 18, 0.35)');
   overlay.addColorStop(1, 'rgba(4, 8, 18, 0.55)');
   ctx.fillStyle = overlay;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  // Main content zone
   const left = 170;
   const top = 185;
   const contentWidth = 1180;
 
-  // Title line
   const fullTitle = `Release ${data.version} • ${data.buildName}`;
-  const titleSize = fitText(ctx, fullTitle, 760, 58, '800');
+  const titleSize = fitText(ctx, fullTitle, 760, 58);
+
   ctx.font = `800 ${titleSize}px sans-serif`;
   ctx.fillStyle = COLORS.white;
   ctx.fillText(`Release ${data.version}`, left, top);
@@ -150,7 +140,6 @@ export async function renderReleaseCard(data) {
   ctx.fillStyle = COLORS.cyan;
   ctx.fillText(` • ${data.buildName}`, left + versionWidth, top);
 
-  // Status chip
   const chipText = String(data.status || 'dev').toUpperCase();
   ctx.font = '800 28px sans-serif';
   const chipPadX = 18;
@@ -173,7 +162,6 @@ export async function renderReleaseCard(data) {
   ctx.fillStyle = statusColor(data.status);
   ctx.fillText(chipText, chipX + chipPadX, chipY + 31);
 
-  // Decorative separator
   ctx.strokeStyle = COLORS.line;
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -181,7 +169,6 @@ export async function renderReleaseCard(data) {
   ctx.lineTo(left + 700, chipY + chipH + 28);
   ctx.stroke();
 
-  // Highlights panel
   const highlightsY = chipY + chipH + 56;
   drawPanel(ctx, left - 16, highlightsY - 40, contentWidth - 140, 245);
 
@@ -201,7 +188,6 @@ export async function renderReleaseCard(data) {
     5
   );
 
-  // Known issues panel
   const issuesTitleY = Math.max(nextY + 22, highlightsY + 190);
   drawPanel(ctx, left - 16, issuesTitleY - 40, contentWidth - 140, 150);
 
@@ -225,7 +211,6 @@ export async function renderReleaseCard(data) {
     3
   );
 
-  // CTA panel
   const ctaY = afterIssuesY + 18;
   drawPanel(ctx, left - 16, ctaY - 40, contentWidth - 140, 120);
 
@@ -235,17 +220,20 @@ export async function renderReleaseCard(data) {
 
   ctx.font = '500 30px sans-serif';
   ctx.fillStyle = COLORS.white;
-  const ctaLines = wrapText(ctx, data.callToAction || 'Share feedback in #alpha-feedback.', contentWidth - 180);
+  const ctaLines = wrapText(
+    ctx,
+    data.callToAction || 'Share feedback in #alpha-feedback.',
+    contentWidth - 180
+  );
+
   ctaLines.slice(0, 2).forEach((line, index) => {
     ctx.fillText(line, left + 8, ctaY + 48 + index * 38);
   });
 
-  // Footer label
   ctx.font = '600 24px sans-serif';
   ctx.fillStyle = COLORS.soft;
   ctx.fillText('UR-Judge System', WIDTH - 360, HEIGHT - 52);
 
-  // Draw frame last
   ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
 
   return canvas.toBuffer('image/png');

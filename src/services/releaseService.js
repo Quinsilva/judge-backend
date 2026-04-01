@@ -1,6 +1,5 @@
 import { AttachmentBuilder, ChannelType } from 'discord.js';
 import { releaseEmbed } from '../embeds/releaseEmbed.js';
-import { renderReleaseCard } from '../renderers/renderReleaseCard.js';
 import { createRelease, getLatestRelease } from '../repositories/releaseRepo.js';
 import {
   ensureGuildChannelConfig,
@@ -10,6 +9,16 @@ import {
   invalidateGuildConfig,
   loadGuildConfig
 } from './guildConfigService.js';
+
+async function tryRenderReleaseCard(payload) {
+  try {
+    const mod = await import('../renderers/renderReleaseCard.js');
+    return await mod.renderReleaseCard(payload);
+  } catch (error) {
+    console.error('Release card renderer unavailable:', error);
+    return null;
+  }
+}
 
 export async function postRelease(interaction, payload) {
   const channelKey = payload.status === 'dev' ? 'buildsDev' : 'buildsStable';
@@ -43,7 +52,6 @@ export async function postRelease(interaction, payload) {
   const guildConfig = await loadGuildConfig(interaction.guildId, { forceRefresh: true });
 
   const channelId = guildConfig?.channels?.[channelKey]?.channelId;
-
   if (!channelId) {
     throw new Error(
       `${channelKey} exists now, but channelId is still null. Set it in Firestore and try again.`
@@ -51,7 +59,6 @@ export async function postRelease(interaction, payload) {
   }
 
   const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
-
   if (!channel) {
     throw new Error('The configured release channel could not be found.');
   }
@@ -69,16 +76,22 @@ export async function postRelease(interaction, payload) {
 
   const content = mentionRoleId ? `<@&${mentionRoleId}>` : undefined;
 
-  const imageBuffer = await renderReleaseCard(payload);
-  const file = new AttachmentBuilder(imageBuffer, { name: 'release-card.png' });
+  const embed = releaseEmbed(payload);
+  const imageBuffer = await tryRenderReleaseCard(payload);
 
-  const embed = releaseEmbed(payload).setImage('attachment://release-card.png');
-
-  const message = await channel.send({
+  const sendPayload = {
     content,
-    embeds: [embed],
-    files: [file]
-  });
+    embeds: [embed]
+  };
+
+  if (imageBuffer) {
+    embed.setImage('attachment://release-card.png');
+    sendPayload.files = [
+      new AttachmentBuilder(imageBuffer, { name: 'release-card.png' })
+    ];
+  }
+
+  const message = await channel.send(sendPayload);
 
   const releaseId = await createRelease(interaction.guildId, {
     ...payload,
