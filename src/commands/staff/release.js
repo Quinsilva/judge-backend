@@ -49,6 +49,8 @@ export async function execute(interaction) {
     const allowed = await requireStaffRole(interaction);
     if (!allowed) return;
 
+    await interaction.deferReply({ ephemeral: true });
+
     const highlights = interaction.options
       .getString('highlights', true)
       .split(',')
@@ -61,8 +63,7 @@ export async function execute(interaction) {
       .filter(Boolean);
 
     if (!highlights.length) {
-      await interaction.reply({
-        ephemeral: true,
+      await interaction.editReply({
         content: 'Please provide at least one highlight.'
       });
       return;
@@ -80,8 +81,7 @@ export async function execute(interaction) {
       mentionTesters: interaction.options.getBoolean('mention_testers') ?? false
     });
 
-    await interaction.reply({
-      ephemeral: true,
+    await interaction.editReply({
       content: [
         `Release posted in <#${result.message.channelId}>.`,
         ...result.autoCreated
@@ -90,11 +90,15 @@ export async function execute(interaction) {
   } catch (error) {
     console.error('Error running /release:', error);
 
-    if (!interaction.replied && !interaction.deferred) {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({
+        content: error.message || 'Something went wrong while posting the release note.'
+      }).catch(() => {});
+    } else {
       await interaction.reply({
         ephemeral: true,
         content: error.message || 'Something went wrong while posting the release note.'
-      });
+      }).catch(() => {});
     }
   }
 }
