@@ -9,6 +9,7 @@
     "start": "node src/index.js"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.97",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "discord.js": "^14.25.1",
