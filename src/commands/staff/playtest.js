@@ -24,6 +24,36 @@ async function tryRenderPlaytestCard(payload) {
   }
 }
 
+async function sendPlaytestMessage(channel, roleId, payload) {
+  const embed = playtestEmbed(payload);
+  const imageBuffer = await tryRenderPlaytestCard(payload);
+  const content = roleId ? `<@&${roleId}>` : undefined;
+
+  if (imageBuffer) {
+    try {
+      const file = new AttachmentBuilder(imageBuffer, { name: 'playtest-card.png' });
+      embed.setImage('attachment://playtest-card.png');
+
+      const message = await channel.send({
+        content,
+        embeds: [embed],
+        files: [file]
+      });
+
+      return { message, usedImage: true };
+    } catch (error) {
+      console.error('Playtest send with image failed, falling back to embed-only:', error);
+    }
+  }
+
+  const message = await channel.send({
+    content,
+    embeds: [embed]
+  });
+
+  return { message, usedImage: false };
+}
+
 export const data = new SlashCommandBuilder()
   .setName('playtest')
   .setDescription('Call for a QA playtest.')
@@ -118,39 +148,14 @@ export async function execute(interaction) {
       notes: interaction.options.getString('notes') || undefined
     };
 
-    const embed = playtestEmbed(payload);
-    const imageBuffer = await tryRenderPlaytestCard(payload);
-
-    let message;
-
-    if (imageBuffer) {
-      try {
-        const file = new AttachmentBuilder(imageBuffer, { name: 'playtest-card.png' });
-        embed.setImage('attachment://playtest-card.png');
-
-        message = await channel.send({
-          content: roleId ? `<@&${roleId}>` : undefined,
-          embeds: [embed],
-          files: [file]
-        });
-      } catch (error) {
-        console.error('Playtest send with image failed, falling back to embed-only:', error);
-
-        message = await channel.send({
-          content: roleId ? `<@&${roleId}>` : undefined,
-          embeds: [embed]
-        });
-      }
-    } else {
-      message = await channel.send({
-        content: roleId ? `<@&${roleId}>` : undefined,
-        embeds: [embed]
-      });
-    }
+    const result = await sendPlaytestMessage(channel, roleId, payload);
 
     await interaction.editReply({
       content: [
-        `Playtest request posted in <#${message.channelId}>.`,
+        `Playtest request posted in <#${result.message.channelId}>.`,
+        result.usedImage
+          ? 'Styled playtest card uploaded successfully.'
+          : 'Playtest posted with embed-only fallback.',
         ...autoCreated
       ].join('\n')
     });
