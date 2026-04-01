@@ -1,6 +1,13 @@
 import { ChannelType, SlashCommandBuilder } from 'discord.js';
 import { playtestEmbed } from '../../embeds/playtestEmbed.js';
-import { loadGuildConfig } from '../../services/guildConfigService.js';
+import {
+  ensureGuildChannelConfig,
+  ensureGuildRoleConfig
+} from '../../repositories/guildRepo.js';
+import {
+  invalidateGuildConfig,
+  loadGuildConfig
+} from '../../services/guildConfigService.js';
 import { requireStaffRole } from '../../utils/staffAuth.js';
 
 export const data = new SlashCommandBuilder()
@@ -24,14 +31,45 @@ export async function execute(interaction) {
     const allowed = await requireStaffRole(interaction);
     if (!allowed) return;
 
-    const guildConfig = await loadGuildConfig(interaction.guildId);
+    const autoCreated = [];
+
+    const ensuredChannel = await ensureGuildChannelConfig(
+      interaction.guildId,
+      'alphaFeedback',
+      interaction.channelId
+    );
+
+    if (ensuredChannel.created) {
+      autoCreated.push(
+        `Created Firestore path guilds/${interaction.guildId}/channels/alphaFeedback and defaulted it to this channel.`
+      );
+    }
+
+    const ensuredRole = await ensureGuildRoleConfig(
+      interaction.guildId,
+      'tester',
+      null
+    );
+
+    if (ensuredRole.created) {
+      autoCreated.push(
+        `Created Firestore path guilds/${interaction.guildId}/roles/tester with roleId: null.`
+      );
+    }
+
+    invalidateGuildConfig(interaction.guildId);
+    const guildConfig = await loadGuildConfig(interaction.guildId, { forceRefresh: true });
+
     const channelId = guildConfig?.channels?.alphaFeedback?.channelId;
     const roleId = guildConfig?.roles?.tester?.roleId;
 
     if (!channelId) {
       await interaction.reply({
         ephemeral: true,
-        content: 'Alpha feedback channel is not configured for this server.'
+        content: [
+          ...autoCreated,
+          'alphaFeedback exists now, but channelId is still null. Set it in Firestore and run the command again.'
+        ].join('\n')
       });
       return;
     }
@@ -71,7 +109,10 @@ export async function execute(interaction) {
 
     await interaction.reply({
       ephemeral: true,
-      content: `Playtest request posted in <#${message.channelId}>.`
+      content: [
+        `Playtest request posted in <#${message.channelId}>.`,
+        ...autoCreated
+      ].join('\n')
     });
   } catch (error) {
     console.error('Error running /playtest:', error);
@@ -79,7 +120,7 @@ export async function execute(interaction) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         ephemeral: true,
-        content: 'Something went wrong while posting the playtest request.'
+        content: error.message || 'Something went wrong while posting the playtest request.'
       });
     }
   }

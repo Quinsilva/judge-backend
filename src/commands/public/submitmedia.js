@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { firestore } from '../../firebase/admin.js';
+import { ensureRewardsConfig } from '../../repositories/guildRepo.js';
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'image/png',
@@ -28,6 +29,15 @@ export async function execute(interaction) {
   const caption = interaction.options.getString('caption') || '';
 
   try {
+    const ensuredRewards = await ensureRewardsConfig(interaction.guildId);
+    const autoCreated = [];
+
+    if (ensuredRewards.created) {
+      autoCreated.push(
+        `Created Firestore path guilds/${interaction.guildId}/config/rewards with default values.`
+      );
+    }
+
     const configSnap = await firestore
       .collection('guilds')
       .doc(interaction.guildId)
@@ -36,13 +46,15 @@ export async function execute(interaction) {
       .get();
 
     const config = configSnap.exists ? configSnap.data() : {};
-    const submissionsEnabled =
-      config.mediaSubmissionsEnabled !== false;
+    const submissionsEnabled = config.mediaSubmissionsEnabled !== false;
 
     if (!submissionsEnabled) {
       await interaction.reply({
         ephemeral: true,
-        content: 'Media submissions are not enabled for this server.'
+        content: [
+          ...autoCreated,
+          'Media submissions are not enabled for this server.'
+        ].join('\n')
       });
       return;
     }
@@ -95,7 +107,10 @@ export async function execute(interaction) {
 
     await interaction.reply({
       ephemeral: true,
-      content: 'Your submission has been queued for admin review.'
+      content: [
+        'Your submission has been queued for admin review.',
+        ...autoCreated
+      ].join('\n')
     });
   } catch (error) {
     console.error('submitmedia failed', error);
@@ -103,7 +118,7 @@ export async function execute(interaction) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         ephemeral: true,
-        content: 'Failed to queue your submission for review.'
+        content: error.message || 'Failed to queue your submission for review.'
       });
     }
   }

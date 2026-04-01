@@ -1,15 +1,40 @@
 import { EmbedBuilder } from 'discord.js';
 
+function statusColor(status) {
+  switch (status) {
+    case 'stable':
+      return 0x57f287;
+    case 'hotfix':
+      return 0xffa64d;
+    case 'dev':
+    default:
+      return 0x37c8ff;
+  }
+}
+
 export function releaseEmbed(payload) {
-  const { version, buildName, status, highlights, knownIssues, callToAction } = payload;
   return new EmbedBuilder()
-    .setTitle(`${status.toUpperCase()} Build ${version}`)
-    .setDescription(buildName || 'Untitled Run build update')
+    .setColor(statusColor(payload.status))
+    .setTitle(`Release ${payload.version} • ${payload.buildName}`)
+    .setDescription(`Status: ${String(payload.status || '').toUpperCase()}`)
     .addFields(
-      { name: 'Highlights', value: Array.isArray(highlights) ? highlights.map((v) => `- ${v}`).join('\n').slice(0, 1024) : String(highlights || 'None') },
-      { name: 'Known Issues', value: Array.isArray(knownIssues) && knownIssues.length ? knownIssues.map((v) => `- ${v}`).join('\n').slice(0, 1024) : 'None listed' },
-      { name: 'Next Step', value: callToAction || 'Share feedback in #alpha-feedback.' }
+      {
+        name: 'Highlights',
+        value: payload.highlights?.length
+          ? payload.highlights.map((item) => `• ${item}`).join('\n')
+          : 'None'
+      },
+      {
+        name: 'Known Issues',
+        value: payload.knownIssues?.length
+          ? payload.knownIssues.map((item) => `• ${item}`).join('\n')
+          : 'None'
+      },
+      {
+        name: 'Next Step',
+        value: payload.callToAction || 'Share feedback in #alpha-feedback.'
+      }
     )
-    .setFooter({ text: 'Judge • Release Notice' })
-    .setTimestamp(new Date());
+    .setFooter({ text: 'UR-Judge System' })
+    .setTimestamp();
 }
