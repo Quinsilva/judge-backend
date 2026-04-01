@@ -2,13 +2,19 @@ import { EmbedBuilder } from 'discord.js';
 
 export function playtestEmbed(payload) {
   return new EmbedBuilder()
-    .setTitle('QA Playtest Request')
-    .setDescription(`Build ${payload.buildVersion} is ready for testing.`)
+    .setColor(0x9cff8a)
+    .setTitle(`Playtest • ${payload.buildVersion}`)
+    .setDescription(`Focus Areas: ${payload.focusAreas}`)
     .addFields(
-      { name: 'Focus Areas', value: payload.focusAreas.slice(0, 1024) },
-      { name: 'Testing Window', value: payload.windowText || 'Check with the team for the current testing window.' },
-      { name: 'Notes', value: payload.notes?.slice(0, 1024) || 'Report bugs and odd behavior in #alpha-feedback.' }
+      {
+        name: 'Testing Window',
+        value: payload.windowText || 'Not specified'
+      },
+      {
+        name: 'Notes',
+        value: payload.notes || 'No additional notes.'
+      }
     )
-    .setFooter({ text: 'Judge • Tester Notice' })
-    .setTimestamp(new Date());
+    .setFooter({ text: 'UR-Judge System' })
+    .setTimestamp();
 }

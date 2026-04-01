@@ -1,4 +1,8 @@
-import { ChannelType, SlashCommandBuilder } from 'discord.js';
+import {
+  AttachmentBuilder,
+  ChannelType,
+  SlashCommandBuilder
+} from 'discord.js';
 import { playtestEmbed } from '../../embeds/playtestEmbed.js';
 import {
   ensureGuildChannelConfig,
@@ -9,6 +13,16 @@ import {
   loadGuildConfig
 } from '../../services/guildConfigService.js';
 import { requireStaffRole } from '../../utils/staffAuth.js';
+
+async function tryRenderPlaytestCard(payload) {
+  try {
+    const mod = await import('../../renderers/renderPlaytestCard.js');
+    return await mod.renderPlaytestCard(payload);
+  } catch (error) {
+    console.error('Playtest card render failed:', error);
+    return null;
+  }
+}
 
 export const data = new SlashCommandBuilder()
   .setName('playtest')
@@ -30,6 +44,8 @@ export async function execute(interaction) {
   try {
     const allowed = await requireStaffRole(interaction);
     if (!allowed) return;
+
+    await interaction.deferReply({ ephemeral: true });
 
     const autoCreated = [];
 
@@ -64,8 +80,7 @@ export async function execute(interaction) {
     const roleId = guildConfig?.roles?.tester?.roleId;
 
     if (!channelId) {
-      await interaction.reply({
-        ephemeral: true,
+      await interaction.editReply({
         content: [
           ...autoCreated,
           'alphaFeedback exists now, but channelId is still null. Set it in Firestore and run the command again.'
@@ -74,11 +89,13 @@ export async function execute(interaction) {
       return;
     }
 
-    const channel = await interaction.guild.channels.fetch(channelId).catch(() => null);
+    const channel = await interaction.guild.channels.fetch(channelId).catch((error) => {
+      console.error('Failed to fetch playtest channel:', error);
+      return null;
+    });
 
     if (!channel) {
-      await interaction.reply({
-        ephemeral: true,
+      await interaction.editReply({
         content: 'The configured alpha feedback channel could not be found.'
       });
       return;
@@ -88,27 +105,50 @@ export async function execute(interaction) {
       channel.type !== ChannelType.GuildText &&
       channel.type !== ChannelType.GuildAnnouncement
     ) {
-      await interaction.reply({
-        ephemeral: true,
+      await interaction.editReply({
         content: 'The configured alpha feedback channel is not a text channel.'
       });
       return;
     }
 
-    const message = await channel.send({
-      content: roleId ? `<@&${roleId}>` : undefined,
-      embeds: [
-        playtestEmbed({
-          buildVersion: interaction.options.getString('build_version', true),
-          focusAreas: interaction.options.getString('focus_areas', true),
-          windowText: interaction.options.getString('window_text') || undefined,
-          notes: interaction.options.getString('notes') || undefined
-        })
-      ]
-    });
+    const payload = {
+      buildVersion: interaction.options.getString('build_version', true),
+      focusAreas: interaction.options.getString('focus_areas', true),
+      windowText: interaction.options.getString('window_text') || undefined,
+      notes: interaction.options.getString('notes') || undefined
+    };
 
-    await interaction.reply({
-      ephemeral: true,
+    const embed = playtestEmbed(payload);
+    const imageBuffer = await tryRenderPlaytestCard(payload);
+
+    let message;
+
+    if (imageBuffer) {
+      try {
+        const file = new AttachmentBuilder(imageBuffer, { name: 'playtest-card.png' });
+        embed.setImage('attachment://playtest-card.png');
+
+        message = await channel.send({
+          content: roleId ? `<@&${roleId}>` : undefined,
+          embeds: [embed],
+          files: [file]
+        });
+      } catch (error) {
+        console.error('Playtest send with image failed, falling back to embed-only:', error);
+
+        message = await channel.send({
+          content: roleId ? `<@&${roleId}>` : undefined,
+          embeds: [embed]
+        });
+      }
+    } else {
+      message = await channel.send({
+        content: roleId ? `<@&${roleId}>` : undefined,
+        embeds: [embed]
+      });
+    }
+
+    await interaction.editReply({
       content: [
         `Playtest request posted in <#${message.channelId}>.`,
         ...autoCreated
@@ -117,11 +157,15 @@ export async function execute(interaction) {
   } catch (error) {
     console.error('Error running /playtest:', error);
 
-    if (!interaction.replied && !interaction.deferred) {
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({
+        content: error.message || 'Something went wrong while posting the playtest request.'
+      }).catch(() => {});
+    } else {
       await interaction.reply({
         ephemeral: true,
         content: error.message || 'Something went wrong while posting the playtest request.'
-      });
+      }).catch(() => {});
     }
   }
 }
