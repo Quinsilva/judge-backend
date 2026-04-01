@@ -1,21 +1,20 @@
 import { env } from '../config/env.js';
 
-function parseRoleIds(value) {
-  return String(value || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 export function getStaffRoleIds() {
-  return parseRoleIds(env.staffRoleIds);
+  return Array.isArray(env.staffRoleIds)
+    ? env.staffRoleIds
+    : String(env.staffRoleIds || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
 }
 
 export function memberHasStaffRole(interaction) {
   const allowedRoleIds = getStaffRoleIds();
 
+  // IMPORTANT: allow all if no roles configured (prevents lockout)
   if (!allowedRoleIds.length) {
-    return false;
+    return true;
   }
 
   const memberRoles = interaction.member?.roles?.cache;
