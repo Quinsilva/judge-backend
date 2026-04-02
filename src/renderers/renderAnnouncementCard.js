@@ -270,7 +270,7 @@ export async function renderAnnouncementCard(data) {
   ctx.stroke();
 
   // TEXT LAST
-
+  ctx.globalAlpha = 1;
   const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
   const titleSize = fitText(ctx, titleText, mainW, 48);
   ctx.font = `600 ${titleSize}px sans-serif`;
