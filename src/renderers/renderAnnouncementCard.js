@@ -83,7 +83,7 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.roundRect(x, y, w, h, r);
 }
 
-function drawPanel(ctx, x, y, w, h, themeColor, fillAlpha = 0.78) {
+function drawPanel(ctx, x, y, w, h, themeColor, fillAlpha = 0.82) {
   const rgb = hexToRgb(themeColor);
 
   ctx.fillStyle = `rgba(8, 10, 16, ${fillAlpha})`;
@@ -153,9 +153,17 @@ async function tryLoadAttachmentImage(attachment, label) {
   }
 }
 
-function drawCoverImage(ctx, image, x, y, w, h, radius = 10) {
+/**
+ * Fit the full image inside the panel bounds.
+ * No cropping, no overflow.
+ */
+function drawContainImage(ctx, image, x, y, w, h, radius = 10, background = 'rgba(0,0,0,0.18)') {
   ctx.save();
+
   clipRoundedRect(ctx, x, y, w, h, radius);
+
+  ctx.fillStyle = background;
+  ctx.fillRect(x, y, w, h);
 
   const imgRatio = image.width / image.height;
   const boxRatio = w / h;
@@ -166,15 +174,15 @@ function drawCoverImage(ctx, image, x, y, w, h, radius = 10) {
   let drawY;
 
   if (imgRatio > boxRatio) {
-    drawH = h;
-    drawW = drawH * imgRatio;
-    drawX = x - (drawW - w) / 2;
-    drawY = y;
-  } else {
     drawW = w;
     drawH = drawW / imgRatio;
     drawX = x;
-    drawY = y - (drawH - h) / 2;
+    drawY = y + (h - drawH) / 2;
+  } else {
+    drawH = h;
+    drawW = drawH * imgRatio;
+    drawX = x + (w - drawW) / 2;
+    drawY = y;
   }
 
   ctx.drawImage(image, drawX, drawY, drawW, drawH);
@@ -190,11 +198,11 @@ function drawBannerPanel(ctx, image, x, y, w, h, themeColor) {
   const innerW = w - innerPad * 2;
   const innerH = h - innerPad * 2;
 
-  drawCoverImage(ctx, image, innerX, innerY, innerW, innerH, 10);
+  drawContainImage(ctx, image, innerX, innerY, innerW, innerH, 10);
 
   const fade = ctx.createLinearGradient(0, innerY, 0, innerY + innerH);
   fade.addColorStop(0, 'rgba(0,0,0,0.04)');
-  fade.addColorStop(1, 'rgba(0,0,0,0.28)');
+  fade.addColorStop(1, 'rgba(0,0,0,0.18)');
   ctx.fillStyle = fade;
   roundedRect(ctx, innerX, innerY, innerW, innerH, 10);
   ctx.fill();
@@ -203,25 +211,17 @@ function drawBannerPanel(ctx, image, x, y, w, h, themeColor) {
 function drawThumbnailPanel(ctx, image, x, y, w, h, themeColor) {
   drawPanel(ctx, x, y, w, h, themeColor, 0.84);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  roundedRect(ctx, x + 14, y + 14, 112, 28, 8);
-  ctx.fill();
-
-  ctx.font = '500 14px monospace';
-  ctx.fillStyle = themeColor;
-  ctx.fillText('[ VISUAL ]', x + 26, y + 33);
-
   const innerPad = 14;
   const innerX = x + innerPad;
   const innerY = y + 54;
   const innerW = w - innerPad * 2;
   const innerH = h - 68;
 
-  drawCoverImage(ctx, image, innerX, innerY, innerW, innerH, 10);
+  drawContainImage(ctx, image, innerX, innerY, innerW, innerH, 10);
 
   const fade = ctx.createLinearGradient(0, innerY, 0, innerY + innerH);
-  fade.addColorStop(0, 'rgba(0,0,0,0.03)');
-  fade.addColorStop(1, 'rgba(0,0,0,0.32)');
+  fade.addColorStop(0, 'rgba(0,0,0,0.02)');
+  fade.addColorStop(1, 'rgba(0,0,0,0.22)');
   ctx.fillStyle = fade;
   roundedRect(ctx, innerX, innerY, innerW, innerH, 10);
   ctx.fill();
@@ -243,10 +243,10 @@ export async function renderAnnouncementCard(data) {
   const thumbnailImage = await tryLoadAttachmentImage(data.thumbnail, 'announcement thumbnail');
   const bannerImage = await tryLoadAttachmentImage(data.image, 'announcement image');
 
-  // Background
+  // 1. Background
   ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
-  // Digital darkening and tint
+  // 2. Tint / effects
   ctx.fillStyle = 'rgba(0,0,0,0.66)';
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -256,7 +256,7 @@ export async function renderAnnouncementCard(data) {
   drawScanlines(ctx);
   drawNoiseBars(ctx, themeColor);
 
-  // Frame before text because asset center is not transparent
+  // 3. Frame behind panels/text
   ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
 
   // Layout
@@ -266,19 +266,8 @@ export async function renderAnnouncementCard(data) {
   const rightGap = thumbnailImage ? 26 : 0;
   const mainWidth = WIDTH - 220 - rightColumnWidth - rightGap;
 
-  // Title
-  const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
-  const titleSize = fitText(ctx, titleText, mainWidth, 48, 600);
-  ctx.font = `600 ${titleSize}px sans-serif`;
-  ctx.fillStyle = themeColor;
-  ctx.fillText(titleText, left, top - 34);
+  // ---- PANELS + IMAGES FIRST ----
 
-  // Status line
-  ctx.font = '500 18px monospace';
-  ctx.fillStyle = '#D5D2E8';
-  ctx.fillText('[ PACKET STATUS: RECOVERED ]', left, top - 2);
-
-  // Summary panel
   const summaryX = left;
   const summaryY = top + 18;
   const summaryW = mainWidth;
@@ -286,17 +275,58 @@ export async function renderAnnouncementCard(data) {
 
   drawPanel(ctx, summaryX, summaryY, summaryW, summaryH, themeColor, 0.74);
 
-  ctx.font = '500 21px monospace';
-  const summaryLines = wrapText(ctx, data.summary || '', summaryW - 28);
-  drawTextBlock(ctx, summaryLines, summaryX + 14, summaryY + 36, 26, '#FFFFFF', 3);
-
-  // Body panel
   const bodyX = left;
   const bodyY = summaryY + summaryH + 22;
   const bodyW = mainWidth;
   const bodyH = bannerImage ? 150 : 230;
 
   drawPanel(ctx, bodyX, bodyY, bodyW, bodyH, themeColor, 0.82);
+
+  let cursorY = bodyY + bodyH + 18;
+
+  if (bannerImage) {
+    const bannerH = 118;
+    drawBannerPanel(ctx, bannerImage, left, cursorY, mainWidth, bannerH, themeColor);
+    cursorY += bannerH + 20;
+  }
+
+  if (thumbnailImage) {
+    const thumbX = left + mainWidth + rightGap;
+    const thumbY = summaryY;
+    const thumbW = rightColumnWidth;
+    const thumbH = 330;
+
+    drawThumbnailPanel(ctx, thumbnailImage, thumbX, thumbY, thumbW, thumbH, themeColor);
+
+    // label panel for thumbnail
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    roundedRect(ctx, thumbX + 14, thumbY + 14, 112, 28, 8);
+    ctx.fill();
+  }
+
+  // Divider line panel accent
+  ctx.strokeStyle = themeColor;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(left, top + 126);
+  ctx.lineTo(left + mainWidth - 10, top + 126);
+  ctx.stroke();
+
+  // ---- TEXT LAST ----
+
+  const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
+  const titleSize = fitText(ctx, titleText, mainWidth, 48, 600);
+  ctx.font = `600 ${titleSize}px sans-serif`;
+  ctx.fillStyle = themeColor;
+  ctx.fillText(titleText, left, top - 34);
+
+  ctx.font = '500 18px monospace';
+  ctx.fillStyle = '#D5D2E8';
+  ctx.fillText('[ PACKET STATUS: RECOVERED ]', left, top - 2);
+
+  ctx.font = '500 21px monospace';
+  const summaryLines = wrapText(ctx, data.summary || '', summaryW - 28);
+  drawTextBlock(ctx, summaryLines, summaryX + 14, summaryY + 36, 26, '#FFFFFF', 3);
 
   ctx.font = '500 18px monospace';
   ctx.fillStyle = '#AAA';
@@ -314,16 +344,6 @@ export async function renderAnnouncementCard(data) {
     bannerImage ? 4 : 7
   );
 
-  // Banner image panel
-  let cursorY = bodyY + bodyH + 18;
-
-  if (bannerImage) {
-    const bannerH = 118;
-    drawBannerPanel(ctx, bannerImage, left, cursorY, mainWidth, bannerH, themeColor);
-    cursorY += bannerH + 20;
-  }
-
-  // Link block
   if (data.link) {
     ctx.font = '500 18px monospace';
     ctx.fillStyle = themeColor;
@@ -334,17 +354,15 @@ export async function renderAnnouncementCard(data) {
     drawTextBlock(ctx, linkLines, left, cursorY + 28, 21, themeColor, 2);
   }
 
-  // Thumbnail module
   if (thumbnailImage) {
     const thumbX = left + mainWidth + rightGap;
     const thumbY = summaryY;
-    const thumbW = rightColumnWidth;
-    const thumbH = 330;
 
-    drawThumbnailPanel(ctx, thumbnailImage, thumbX, thumbY, thumbW, thumbH, themeColor);
+    ctx.font = '500 14px monospace';
+    ctx.fillStyle = themeColor;
+    ctx.fillText('[ VISUAL ]', thumbX + 26, thumbY + 33);
   }
 
-  // Footer
   ctx.font = '500 16px monospace';
   ctx.fillStyle = '#BBB';
   ctx.fillText('JUDGE // TRACE ACTIVE', left, HEIGHT - 30);
