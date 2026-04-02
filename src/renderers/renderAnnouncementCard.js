@@ -295,8 +295,8 @@ export async function renderAnnouncementCard(data) {
 
   beginTextLayer(ctx);
   const titleSize = fitText(ctx, titleText, mainW, 48);
-  ctx.font = `600 ${titleSize}px sans-serif`;
-  ctx.fillStyle = themeColor;
+  ctx.font = `600 ${titleSize}px monospace`;
+  ctx.fillStyle = '#FFF';
   ctx.fillText(titleText, left, titleY);
   endTextLayer(ctx);
 
@@ -309,19 +309,19 @@ export async function renderAnnouncementCard(data) {
   beginTextLayer(ctx);
   ctx.font = '500 21px monospace';
   const summaryLines = wrapText(ctx, data.summary || '', mainW - 28);
-  drawTextBlock(ctx, summaryLines, left + 14, summaryPanelY + 34, 26, '#FFFFFF', 3);
+  drawTextBlock(ctx, summaryLines, left + 10, summaryPanelY + 34, 26, '#FFFFFF', 3);
   endTextLayer(ctx);
 
   beginTextLayer(ctx);
   ctx.font = '500 18px monospace';
-  ctx.fillStyle = '#AAA';
-  ctx.fillText('[ ARCHIVE LOG ]', left + 14, bodyPanelY + 24);
+  ctx.fillStyle = '#FFF';
+  ctx.fillText('[ ARCHIVE LOG ]', left + 10, bodyPanelY + 24);
   endTextLayer(ctx);
 
   beginTextLayer(ctx);
   ctx.font = '500 20px monospace';
   const bodyLines = wrapText(ctx, data.body || '', mainW - 28);
-  drawTextBlock(ctx, bodyLines, left + 14, bodyPanelY + 58, 25, '#FFFFFF', 5);
+  drawTextBlock(ctx, bodyLines, left + 10, bodyPanelY + 58, 25, '#FFFFFF', 5);
   endTextLayer(ctx);
 
   if (data.link) {
