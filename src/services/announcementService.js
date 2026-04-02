@@ -17,8 +17,12 @@ function resolveTargetChannel(interaction, selectedChannel) {
 
 function isImageAttachment(attachment) {
   if (!attachment) return false;
-  return typeof attachment.contentType === 'string' &&
-    attachment.contentType.startsWith('image/');
+
+  return (
+    typeof attachment.url === 'string' &&
+    typeof attachment.contentType === 'string' &&
+    attachment.contentType.startsWith('image/')
+  );
 }
 
 export async function postAnnouncement(interaction, payload) {
@@ -38,25 +42,28 @@ export async function postAnnouncement(interaction, payload) {
   const imageUrl = isImageAttachment(payload.image) ? payload.image.url : null;
   const thumbnailUrl = isImageAttachment(payload.thumbnail) ? payload.thumbnail.url : null;
 
-  const embed = announcementEmbed({
+  const renderPayload = {
+    ...payload,
+    image: isImageAttachment(payload.image) ? payload.image : null,
+    thumbnail: isImageAttachment(payload.thumbnail) ? payload.thumbnail : null
+  };
+
+  const embedPayload = {
     ...payload,
     image: imageUrl,
     thumbnail: thumbnailUrl
-  });
+  };
 
-  if (thumbnailUrl) {
-    embed.setThumbnail(thumbnailUrl);
-  }
+  const embed = announcementEmbed(embedPayload);
 
-  if (imageUrl) {
-    embed.setImage(imageUrl);
-  }
-
-  const imageBuffer = await tryRenderAnnouncementCard(payload);
+  const imageBuffer = await tryRenderAnnouncementCard(renderPayload);
 
   if (imageBuffer) {
     try {
-      const file = new AttachmentBuilder(imageBuffer, { name: 'announcement-card.png' });
+      const file = new AttachmentBuilder(imageBuffer, {
+        name: 'announcement-card.png'
+      });
+
       embed.setImage('attachment://announcement-card.png');
 
       const message = await targetChannel.send({
@@ -64,7 +71,10 @@ export async function postAnnouncement(interaction, payload) {
         files: [file]
       });
 
-      return { message, usedImage: true };
+      return {
+        message,
+        usedImage: true
+      };
     } catch (error) {
       console.error('Announcement send with image failed, falling back to embed-only:', error);
     }
@@ -74,5 +84,8 @@ export async function postAnnouncement(interaction, payload) {
     embeds: [embed]
   });
 
-  return { message: fallbackMessage, usedImage: false };
+  return {
+    message: fallbackMessage,
+    usedImage: false
+  };
 }
