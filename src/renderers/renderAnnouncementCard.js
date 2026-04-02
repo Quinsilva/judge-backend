@@ -28,6 +28,30 @@ async function ensureAsset(filePath) {
   await fs.access(filePath);
 }
 
+function hexToRgb(hex) {
+  const clean = hex.replace('#', '');
+  const value = parseInt(clean, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
+}
+
+function fitText(ctx, text, maxWidth, startSize, weight = 600, family = 'sans-serif') {
+  let size = startSize;
+
+  while (size > 14) {
+    ctx.font = `${weight} ${size}px ${family}`;
+    if (ctx.measureText(text).width <= maxWidth) {
+      return size;
+    }
+    size -= 2;
+  }
+
+  return size;
+}
+
 function wrapText(ctx, text, maxWidth) {
   const words = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
@@ -47,24 +71,34 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-function fitText(ctx, text, maxWidth, startSize, family = 'sans-serif') {
-  let size = startSize;
-  while (size > 16) {
-    ctx.font = `500 ${size}px ${family}`;
-    if (ctx.measureText(text).width <= maxWidth) return size;
-    size -= 2;
+function drawTextBlock(ctx, lines, x, y, lineHeight, color, maxLines) {
+  ctx.fillStyle = color;
+  for (let i = 0; i < Math.min(lines.length, maxLines); i += 1) {
+    ctx.fillText(lines[i], x, y + i * lineHeight);
   }
-  return size;
 }
 
-function hexToRgb(hex) {
-  const clean = hex.replace('#', '');
-  const value = parseInt(clean, 16);
-  return {
-    r: (value >> 16) & 255,
-    g: (value >> 8) & 255,
-    b: value & 255
-  };
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
+function drawPanel(ctx, x, y, w, h, themeColor, fillAlpha = 0.78) {
+  const rgb = hexToRgb(themeColor);
+
+  ctx.fillStyle = `rgba(8, 10, 16, ${fillAlpha})`;
+  roundedRect(ctx, x, y, w, h, 12);
+  ctx.fill();
+
+  ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.38)`;
+  ctx.lineWidth = 1.5;
+  roundedRect(ctx, x, y, w, h, 12);
+  ctx.stroke();
+}
+
+function clipRoundedRect(ctx, x, y, w, h, r) {
+  roundedRect(ctx, x, y, w, h, r);
+  ctx.clip();
 }
 
 function drawScanlines(ctx) {
@@ -82,36 +116,19 @@ function drawScanlines(ctx) {
 function drawNoiseBars(ctx, themeColor) {
   ctx.save();
   const rgb = hexToRgb(themeColor);
-  ctx.globalAlpha = 0.18;
+  ctx.globalAlpha = 0.16;
 
-  for (let i = 0; i < 40; i += 1) {
-    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${Math.random() * 0.4})`;
+  for (let i = 0; i < 32; i += 1) {
+    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${0.18 + Math.random() * 0.25})`;
     ctx.fillRect(
       Math.random() * WIDTH,
       Math.random() * HEIGHT,
-      10 + Math.random() * 30,
+      12 + Math.random() * 34,
       2 + Math.random() * 4
     );
   }
 
   ctx.restore();
-}
-
-function drawTextBlock(ctx, lines, x, y, lineHeight, color, maxLines) {
-  ctx.fillStyle = color;
-  for (let i = 0; i < Math.min(lines.length, maxLines); i += 1) {
-    ctx.fillText(lines[i], x, y + i * lineHeight);
-  }
-}
-
-function roundedRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-}
-
-function clipRoundedRect(ctx, x, y, w, h, r) {
-  roundedRect(ctx, x, y, w, h, r);
-  ctx.clip();
 }
 
 function isImageAttachment(attachment) {
@@ -131,7 +148,7 @@ async function tryLoadAttachmentImage(attachment, label) {
   try {
     return await loadImage(attachment.url);
   } catch (error) {
-    console.error(`Failed to load ${label} into renderer:`, error);
+    console.error(`Failed to load ${label}:`, error);
     return null;
   }
 }
@@ -164,66 +181,49 @@ function drawCoverImage(ctx, image, x, y, w, h, radius = 10) {
   ctx.restore();
 }
 
-function drawThumbnailPanel(ctx, image, x, y, w, h, themeColor) {
-  const rgb = hexToRgb(themeColor);
+function drawBannerPanel(ctx, image, x, y, w, h, themeColor) {
+  drawPanel(ctx, x, y, w, h, themeColor, 0.86);
 
-  ctx.fillStyle = 'rgba(8, 10, 16, 0.82)';
-  roundedRect(ctx, x, y, w, h, 12);
-  ctx.fill();
-
-  ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.45)`;
-  ctx.lineWidth = 2;
-  roundedRect(ctx, x, y, w, h, 12);
-  ctx.stroke();
-
-  ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.18)`;
-  roundedRect(ctx, x + 12, y + 12, 110, 28, 8);
-  ctx.fill();
-
-  ctx.font = '500 14px monospace';
-  ctx.fillStyle = themeColor;
-  ctx.fillText('[ VISUAL ]', x + 22, y + 31);
-
-  const pad = 14;
-  const innerX = x + pad;
-  const innerY = y + 50;
-  const innerW = w - pad * 2;
-  const innerH = h - 64;
+  const innerPad = 10;
+  const innerX = x + innerPad;
+  const innerY = y + innerPad;
+  const innerW = w - innerPad * 2;
+  const innerH = h - innerPad * 2;
 
   drawCoverImage(ctx, image, innerX, innerY, innerW, innerH, 10);
 
   const fade = ctx.createLinearGradient(0, innerY, 0, innerY + innerH);
-  fade.addColorStop(0, 'rgba(0,0,0,0)');
-  fade.addColorStop(1, 'rgba(0,0,0,0.35)');
+  fade.addColorStop(0, 'rgba(0,0,0,0.04)');
+  fade.addColorStop(1, 'rgba(0,0,0,0.28)');
   ctx.fillStyle = fade;
   roundedRect(ctx, innerX, innerY, innerW, innerH, 10);
   ctx.fill();
-
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 1;
-  roundedRect(ctx, innerX, innerY, innerW, innerH, 10);
-  ctx.stroke();
 }
 
-function drawBannerPanel(ctx, image, x, y, w, h, themeColor) {
-  const rgb = hexToRgb(themeColor);
+function drawThumbnailPanel(ctx, image, x, y, w, h, themeColor) {
+  drawPanel(ctx, x, y, w, h, themeColor, 0.84);
 
-  ctx.fillStyle = 'rgba(8, 10, 16, 0.82)';
-  roundedRect(ctx, x, y, w, h, 12);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  roundedRect(ctx, x + 14, y + 14, 112, 28, 8);
   ctx.fill();
 
-  ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.38)`;
-  ctx.lineWidth = 1.5;
-  roundedRect(ctx, x, y, w, h, 12);
-  ctx.stroke();
+  ctx.font = '500 14px monospace';
+  ctx.fillStyle = themeColor;
+  ctx.fillText('[ VISUAL ]', x + 26, y + 33);
 
-  drawCoverImage(ctx, image, x + 10, y + 10, w - 20, h - 20, 10);
+  const innerPad = 14;
+  const innerX = x + innerPad;
+  const innerY = y + 54;
+  const innerW = w - innerPad * 2;
+  const innerH = h - 68;
 
-  const fade = ctx.createLinearGradient(0, y, 0, y + h);
-  fade.addColorStop(0, 'rgba(0,0,0,0.08)');
+  drawCoverImage(ctx, image, innerX, innerY, innerW, innerH, 10);
+
+  const fade = ctx.createLinearGradient(0, innerY, 0, innerY + innerH);
+  fade.addColorStop(0, 'rgba(0,0,0,0.03)');
   fade.addColorStop(1, 'rgba(0,0,0,0.32)');
   ctx.fillStyle = fade;
-  roundedRect(ctx, x + 10, y + 10, w - 20, h - 20, 10);
+  roundedRect(ctx, innerX, innerY, innerW, innerH, 10);
   ctx.fill();
 }
 
@@ -241,94 +241,110 @@ export async function renderAnnouncementCard(data) {
   const rgb = hexToRgb(themeColor);
 
   const thumbnailImage = await tryLoadAttachmentImage(data.thumbnail, 'announcement thumbnail');
-  const attachedImage = await tryLoadAttachmentImage(data.image, 'announcement image');
+  const bannerImage = await tryLoadAttachmentImage(data.image, 'announcement image');
 
+  // Background
   ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  // Digital darkening and tint
+  ctx.fillStyle = 'rgba(0,0,0,0.66)';
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.12)`;
+  ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.10)`;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
   drawScanlines(ctx);
   drawNoiseBars(ctx, themeColor);
 
-  // frame before text because current border asset is not transparent
+  // Frame before text because asset center is not transparent
   ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
 
+  // Layout
   const left = 110;
   const top = 110;
   const rightColumnWidth = thumbnailImage ? 250 : 0;
-  const gap = thumbnailImage ? 28 : 0;
-  const contentWidth = WIDTH - 220 - rightColumnWidth - gap;
+  const rightGap = thumbnailImage ? 26 : 0;
+  const mainWidth = WIDTH - 220 - rightColumnWidth - rightGap;
 
+  // Title
   const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
-  const titleSize = fitText(ctx, titleText, contentWidth, 48);
+  const titleSize = fitText(ctx, titleText, mainWidth, 48, 600);
   ctx.font = `600 ${titleSize}px sans-serif`;
   ctx.fillStyle = themeColor;
-  ctx.fillText(titleText, left, top - 30);
+  ctx.fillText(titleText, left, top - 34);
 
+  // Status line
   ctx.font = '500 18px monospace';
-  ctx.fillStyle = '#CFCBFF';
-  ctx.fillText('[ PACKET STATUS: RECOVERED ]', left, top);
+  ctx.fillStyle = '#D5D2E8';
+  ctx.fillText('[ PACKET STATUS: RECOVERED ]', left, top - 2);
 
-  ctx.font = '500 22px monospace';
-  const summaryLines = wrapText(ctx, data.summary || '', contentWidth - 20);
-  drawTextBlock(ctx, summaryLines, left, top + 40, 28, '#FFFFFF', 3);
+  // Summary panel
+  const summaryX = left;
+  const summaryY = top + 18;
+  const summaryW = mainWidth;
+  const summaryH = 108;
 
-  ctx.strokeStyle = themeColor;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(left, top + 110);
-  ctx.lineTo(left + contentWidth - 10, top + 110);
-  ctx.stroke();
+  drawPanel(ctx, summaryX, summaryY, summaryW, summaryH, themeColor, 0.74);
 
-  const boxY = top + 130;
-  const boxW = contentWidth - 10;
-  const boxH = attachedImage ? 165 : 210;
+  ctx.font = '500 21px monospace';
+  const summaryLines = wrapText(ctx, data.summary || '', summaryW - 28);
+  drawTextBlock(ctx, summaryLines, summaryX + 14, summaryY + 36, 26, '#FFFFFF', 3);
 
-  ctx.fillStyle = 'rgba(10,12,18,0.82)';
-  ctx.fillRect(left, boxY, boxW, boxH);
+  // Body panel
+  const bodyX = left;
+  const bodyY = summaryY + summaryH + 22;
+  const bodyW = mainWidth;
+  const bodyH = bannerImage ? 150 : 230;
 
-  ctx.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.4)`;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(left, boxY, boxW, boxH);
+  drawPanel(ctx, bodyX, bodyY, bodyW, bodyH, themeColor, 0.82);
 
   ctx.font = '500 18px monospace';
   ctx.fillStyle = '#AAA';
-  ctx.fillText('[ ARCHIVE LOG ]', left + 10, boxY + 25);
+  ctx.fillText('[ ARCHIVE LOG ]', bodyX + 14, bodyY + 24);
 
   ctx.font = '500 20px monospace';
-  const bodyLines = wrapText(ctx, data.body || '', boxW - 24);
-  drawTextBlock(ctx, bodyLines, left + 10, boxY + 60, 26, '#FFFFFF', attachedImage ? 4 : 6);
+  const bodyLines = wrapText(ctx, data.body || '', bodyW - 28);
+  drawTextBlock(
+    ctx,
+    bodyLines,
+    bodyX + 14,
+    bodyY + 58,
+    25,
+    '#FFFFFF',
+    bannerImage ? 4 : 7
+  );
 
-  let cursorY = boxY + boxH + 24;
+  // Banner image panel
+  let cursorY = bodyY + bodyH + 18;
 
-  if (attachedImage) {
-    drawBannerPanel(ctx, attachedImage, left, cursorY, boxW, 120, themeColor);
-    cursorY += 138;
+  if (bannerImage) {
+    const bannerH = 118;
+    drawBannerPanel(ctx, bannerImage, left, cursorY, mainWidth, bannerH, themeColor);
+    cursorY += bannerH + 20;
   }
 
+  // Link block
   if (data.link) {
     ctx.font = '500 18px monospace';
     ctx.fillStyle = themeColor;
     ctx.fillText('[ UPLINK ]', left, cursorY);
 
-    const linkLines = wrapText(ctx, data.link, contentWidth - 20);
     ctx.font = '500 17px monospace';
-    drawTextBlock(ctx, linkLines, left, cursorY + 30, 22, themeColor, 2);
+    const linkLines = wrapText(ctx, data.link, mainWidth - 8);
+    drawTextBlock(ctx, linkLines, left, cursorY + 28, 21, themeColor, 2);
   }
 
+  // Thumbnail module
   if (thumbnailImage) {
-    const thumbX = left + contentWidth + gap;
-    const thumbY = top + 10;
+    const thumbX = left + mainWidth + rightGap;
+    const thumbY = summaryY;
     const thumbW = rightColumnWidth;
     const thumbH = 330;
 
     drawThumbnailPanel(ctx, thumbnailImage, thumbX, thumbY, thumbW, thumbH, themeColor);
   }
 
+  // Footer
   ctx.font = '500 16px monospace';
   ctx.fillStyle = '#BBB';
   ctx.fillText('JUDGE // TRACE ACTIVE', left, HEIGHT - 30);
