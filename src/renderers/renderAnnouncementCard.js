@@ -108,6 +108,7 @@ function drawNoiseBars(ctx, themeColor) {
 function drawPanel(ctx, x, y, w, h, themeColor, fillAlpha = 0.82) {
   const rgb = hexToRgb(themeColor);
 
+  ctx.save();
   ctx.fillStyle = `rgba(8, 10, 16, ${fillAlpha})`;
   roundedRect(ctx, x, y, w, h, 12);
   ctx.fill();
@@ -116,6 +117,7 @@ function drawPanel(ctx, x, y, w, h, themeColor, fillAlpha = 0.82) {
   ctx.lineWidth = 1.5;
   roundedRect(ctx, x, y, w, h, 12);
   ctx.stroke();
+  ctx.restore();
 }
 
 function isImageAttachment(attachment) {
@@ -171,11 +173,27 @@ function drawContainImage(ctx, image, x, y, w, h, radius = 10) {
   ctx.restore();
 }
 
+function beginTextLayer(ctx) {
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+function endTextLayer(ctx) {
+  ctx.restore();
+}
+
 function drawTextBlock(ctx, lines, x, y, lineHeight, color, maxLines) {
+  beginTextLayer(ctx);
   ctx.fillStyle = color;
   for (let i = 0; i < Math.min(lines.length, maxLines); i += 1) {
     ctx.fillText(lines[i], x, y + i * lineHeight);
   }
+  endTextLayer(ctx);
 }
 
 export async function renderAnnouncementCard(data) {
@@ -207,7 +225,7 @@ export async function renderAnnouncementCard(data) {
   drawScanlines(ctx);
   drawNoiseBars(ctx, themeColor);
 
-  // Frame behind everything
+  // Frame stays behind content
   ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
 
   // Layout
@@ -218,7 +236,6 @@ export async function renderAnnouncementCard(data) {
   const gap = thumbnailImage ? 26 : 0;
   const mainW = WIDTH - 220 - thumbColumnW - gap;
 
-  // Stable text layout, close to your old version
   const titleY = top - 30;
   const statusY = top;
   const summaryPanelY = top + 20;
@@ -230,7 +247,7 @@ export async function renderAnnouncementCard(data) {
   const bannerPanelY = bodyPanelY + bodyPanelH + 20;
   const bannerPanelH = bannerImage ? 95 : 0;
 
-  // Draw panels first
+  // Panels and images first
   drawPanel(ctx, left, summaryPanelY, mainW, summaryPanelH, themeColor, 0.74);
   drawPanel(ctx, left, bodyPanelY, mainW, bodyPanelH, themeColor, 0.82);
 
@@ -246,9 +263,11 @@ export async function renderAnnouncementCard(data) {
 
     drawPanel(ctx, thumbX, thumbY, thumbColumnW, thumbH, themeColor, 0.84);
 
+    ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.06)';
     roundedRect(ctx, thumbX + 14, thumbY + 14, 112, 28, 8);
     ctx.fill();
+    ctx.restore();
 
     drawContainImage(
       ctx,
@@ -262,61 +281,81 @@ export async function renderAnnouncementCard(data) {
   }
 
   // Divider
+  ctx.save();
   ctx.strokeStyle = themeColor;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.moveTo(left, summaryPanelY - 8);
   ctx.lineTo(left + mainW - 10, summaryPanelY - 8);
   ctx.stroke();
+  ctx.restore();
 
-  // TEXT LAST
-  ctx.globalAlpha = 1;
+  // Text last, in a clean state every time
   const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
+
+  beginTextLayer(ctx);
   const titleSize = fitText(ctx, titleText, mainW, 48);
   ctx.font = `600 ${titleSize}px sans-serif`;
   ctx.fillStyle = themeColor;
   ctx.fillText(titleText, left, titleY);
+  endTextLayer(ctx);
 
+  beginTextLayer(ctx);
   ctx.font = '500 18px monospace';
   ctx.fillStyle = '#D5D2E8';
   ctx.fillText('[ PACKET STATUS: RECOVERED ]', left, statusY);
+  endTextLayer(ctx);
 
+  beginTextLayer(ctx);
   ctx.font = '500 21px monospace';
   const summaryLines = wrapText(ctx, data.summary || '', mainW - 28);
   drawTextBlock(ctx, summaryLines, left + 14, summaryPanelY + 34, 26, '#FFFFFF', 3);
+  endTextLayer(ctx);
 
+  beginTextLayer(ctx);
   ctx.font = '500 18px monospace';
   ctx.fillStyle = '#AAA';
   ctx.fillText('[ ARCHIVE LOG ]', left + 14, bodyPanelY + 24);
+  endTextLayer(ctx);
 
+  beginTextLayer(ctx);
   ctx.font = '500 20px monospace';
   const bodyLines = wrapText(ctx, data.body || '', mainW - 28);
   drawTextBlock(ctx, bodyLines, left + 14, bodyPanelY + 58, 25, '#FFFFFF', 5);
+  endTextLayer(ctx);
 
   if (data.link) {
     const linkY = bannerImage ? bannerPanelY + bannerPanelH + 26 : bodyPanelY + bodyPanelH + 26;
 
+    beginTextLayer(ctx);
     ctx.font = '500 18px monospace';
     ctx.fillStyle = themeColor;
     ctx.fillText('[ UPLINK ]', left, linkY);
+    endTextLayer(ctx);
 
+    beginTextLayer(ctx);
     ctx.font = '500 17px monospace';
     const linkLines = wrapText(ctx, data.link, mainW - 8);
     drawTextBlock(ctx, linkLines, left, linkY + 26, 21, themeColor, 2);
+    endTextLayer(ctx);
   }
 
   if (thumbnailImage) {
     const thumbX = left + mainW + gap;
     const thumbY = summaryPanelY;
 
+    beginTextLayer(ctx);
     ctx.font = '500 14px monospace';
     ctx.fillStyle = themeColor;
     ctx.fillText('[ VISUAL ]', thumbX + 26, thumbY + 33);
+    endTextLayer(ctx);
   }
 
+  beginTextLayer(ctx);
   ctx.font = '500 16px monospace';
   ctx.fillStyle = '#BBB';
   ctx.fillText('JUDGE // TRACE ACTIVE', left, HEIGHT - 30);
+  endTextLayer(ctx);
 
   return canvas.toBuffer('image/png');
 }
