@@ -295,8 +295,8 @@ export async function renderAnnouncementCard(data) {
 
   beginTextLayer(ctx);
   const titleSize = fitText(ctx, titleText, mainW, 48);
-  ctx.font = `600 ${titleSize}px monospace`;
-  ctx.fillStyle = '#FFF';
+  ctx.font = `600 ${titleSize}px sans-serif`;
+  ctx.fillStyle = themeColor;
   ctx.fillText(titleText, left, titleY);
   endTextLayer(ctx);
 
@@ -314,7 +314,7 @@ export async function renderAnnouncementCard(data) {
 
   beginTextLayer(ctx);
   ctx.font = '500 18px monospace';
-  ctx.fillStyle = '#FFF';
+  ctx.fillStyle = '#AAA';
   ctx.fillText('[ ARCHIVE LOG ]', left + 10, bodyPanelY + 24);
   endTextLayer(ctx);
 
