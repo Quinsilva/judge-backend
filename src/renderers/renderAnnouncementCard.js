@@ -281,24 +281,24 @@ export async function renderAnnouncementCard(data) {
   }
 
   // Divider
-  ctx.save();
-  ctx.strokeStyle = themeColor;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(left, summaryPanelY - 8);
-  ctx.lineTo(left + mainW - 10, summaryPanelY - 8);
-  ctx.stroke();
+    ctx.save();
+    ctx.strokeStyle = themeColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(left, summaryPanelY - 8);
+    ctx.lineTo(left + mainW - 10, summaryPanelY - 8);
+    ctx.stroke();
+    ctx.restore(); // ← ADDED: was missing, causing state leak into all text below
 
-  // Text last, in a clean state every time
-  ctx.save(); // Save the current state before drawing text
-  const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
+    // Title
+    const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
 
-  beginTextLayer(ctx);
-  const titleSize = fitText(ctx, titleText, mainW, 48);
-  ctx.font = `600 ${titleSize}px sans-serif`;
-  ctx.fillStyle = themeColor;
-  ctx.fillText(titleText, left, titleY);
-  endTextLayer(ctx);
+    beginTextLayer(ctx);
+    const titleSize = fitText(ctx, titleText, mainW, 48);
+    ctx.font = `600 ${titleSize}px sans-serif`;
+    ctx.fillStyle = themeColor;
+    ctx.fillText(titleText, left, titleY);
+    endTextLayer(ctx);
   
   ctx.restore(); // Restore the context after drawing
 
