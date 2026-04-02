@@ -288,9 +288,9 @@ export async function renderAnnouncementCard(data) {
   ctx.moveTo(left, summaryPanelY - 8);
   ctx.lineTo(left + mainW - 10, summaryPanelY - 8);
   ctx.stroke();
-  ctx.restore();
 
   // Text last, in a clean state every time
+  ctx.save(); // Save the current state before drawing text
   const titleText = String(data.title || 'ANNOUNCEMENT').toUpperCase();
 
   beginTextLayer(ctx);
@@ -299,6 +299,8 @@ export async function renderAnnouncementCard(data) {
   ctx.fillStyle = themeColor;
   ctx.fillText(titleText, left, titleY);
   endTextLayer(ctx);
+  
+  ctx.restore(); // Restore the context after drawing
 
   beginTextLayer(ctx);
   ctx.font = '500 18px monospace';
