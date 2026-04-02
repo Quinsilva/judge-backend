@@ -17,11 +17,17 @@ export const data = new SlashCommandBuilder()
   .addStringOption((option) =>
     option.setName('link').setDescription('Optional link')
   )
-  .addStringOption((option) =>
-    option.setName('image').setDescription('Optional banner image URL')
+  .addAttachmentOption((option) =>
+    option
+      .setName('image')
+      .setDescription('Optional banner image attachment')
+      .setRequired(false)
   )
-  .addStringOption((option) =>
-    option.setName('thumbnail').setDescription('Optional thumbnail image URL')
+  .addAttachmentOption((option) =>
+    option
+      .setName('thumbnail')
+      .setDescription('Optional thumbnail image attachment')
+      .setRequired(false)
   )
   .addStringOption((option) =>
     option
@@ -50,13 +56,16 @@ export async function execute(interaction) {
     const allowed = await requireStaffRole(interaction);
     if (!allowed) return;
 
+    const image = interaction.options.getAttachment('image');
+    const thumbnail = interaction.options.getAttachment('thumbnail');
+
     const result = await postAnnouncement(interaction, {
       title: interaction.options.getString('title', true),
       summary: interaction.options.getString('summary', true),
       body: interaction.options.getString('body', true),
       link: interaction.options.getString('link'),
-      image: interaction.options.getString('image'),
-      thumbnail: interaction.options.getString('thumbnail'),
+      image,
+      thumbnail,
       theme: interaction.options.getString('theme') ?? 'cyan',
       channel: interaction.options.getChannel('channel')
     });

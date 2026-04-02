@@ -15,6 +15,12 @@ function resolveTargetChannel(interaction, selectedChannel) {
   return selectedChannel || interaction.channel;
 }
 
+function isImageAttachment(attachment) {
+  if (!attachment) return false;
+  return typeof attachment.contentType === 'string' &&
+    attachment.contentType.startsWith('image/');
+}
+
 export async function postAnnouncement(interaction, payload) {
   const targetChannel = resolveTargetChannel(interaction, payload.channel);
 
@@ -29,14 +35,21 @@ export async function postAnnouncement(interaction, payload) {
     throw new Error('Announcements can only be posted to a text or announcement channel.');
   }
 
-  const embed = announcementEmbed(payload);
+  const imageUrl = isImageAttachment(payload.image) ? payload.image.url : null;
+  const thumbnailUrl = isImageAttachment(payload.thumbnail) ? payload.thumbnail.url : null;
 
-  if (payload.thumbnail) {
-    embed.setThumbnail(payload.thumbnail);
+  const embed = announcementEmbed({
+    ...payload,
+    image: imageUrl,
+    thumbnail: thumbnailUrl
+  });
+
+  if (thumbnailUrl) {
+    embed.setThumbnail(thumbnailUrl);
   }
 
-  if (payload.image) {
-    embed.setImage(payload.image);
+  if (imageUrl) {
+    embed.setImage(imageUrl);
   }
 
   const imageBuffer = await tryRenderAnnouncementCard(payload);
