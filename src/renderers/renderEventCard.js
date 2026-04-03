@@ -1,0 +1,315 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const ASSET_DIR = path.join(__dirname, '../assets/ui');
+const BG_PATH = path.join(ASSET_DIR, 'release-bg.png');
+const FRAME_PATH = path.join(ASSET_DIR, 'render-card.png');
+
+const WIDTH = 1200;
+const HEIGHT = 675;
+
+const THEME_COLORS = {
+  cyan: '#7EEBFF',
+  red: '#FF6B8A',
+  green: '#A7FF7A',
+  purple: '#B29CFF'
+};
+
+function getThemeColor(theme) {
+  return THEME_COLORS[theme] || THEME_COLORS.cyan;
+}
+
+async function ensureAsset(filePath) {
+  await fs.access(filePath);
+}
+
+function hexToRgb(hex) {
+  const clean = hex.replace('#', '');
+  const value = parseInt(clean, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
+function clipRoundedRect(ctx, x, y, w, h, r) {
+  roundedRect(ctx, x, y, w, h, r);
+  ctx.clip();
+}
+
+function wrapText(ctx, text, maxWidth) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = '';
+
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width <= maxWidth) {
+      current = test;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
+  }
+
+  if (current) lines.push(current);
+  return lines;
+}
+
+function fitText(ctx, text, maxWidth, startSize, weight = 600, family = 'sans-serif') {
+  let size = startSize;
+  while (size > 16) {
+    ctx.font = `${weight} ${size}px ${family}`;
+    if (ctx.measureText(text).width <= maxWidth) return size;
+    size -= 2;
+  }
+  return size;
+}
+
+function drawContainImage(ctx, image, x, y, w, h, radius = 10, background = 'rgba(0,0,0,0.18)') {
+  ctx.save();
+  clipRoundedRect(ctx, x, y, w, h, radius);
+
+  ctx.fillStyle = background;
+  ctx.fillRect(x, y, w, h);
+
+  const imgRatio = image.width / image.height;
+  const boxRatio = w / h;
+
+  let drawW;
+  let drawH;
+  let drawX;
+  let drawY;
+
+  if (imgRatio > boxRatio) {
+    drawW = w;
+    drawH = drawW / imgRatio;
+    drawX = x;
+    drawY = y + (h - drawH) / 2;
+  } else {
+    drawH = h;
+    drawW = drawH * imgRatio;
+    drawX = x + (w - drawW) / 2;
+    drawY = y;
+  }
+
+  ctx.drawImage(image, drawX, drawY, drawW, drawH);
+  ctx.restore();
+}
+
+function isImageAttachment(attachment) {
+  return Boolean(
+    attachment &&
+      typeof attachment.url === 'string' &&
+      typeof attachment.contentType === 'string' &&
+      attachment.contentType.startsWith('image/')
+  );
+}
+
+async function tryLoadAttachmentImage(attachment) {
+  if (!isImageAttachment(attachment)) return null;
+
+  try {
+    return await loadImage(attachment.url);
+  } catch (error) {
+    console.error('Failed to load event renderer attachment:', error);
+    return null;
+  }
+}
+
+function drawScanlines(ctx) {
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = '#FFFFFF';
+
+  for (let y = 0; y < HEIGHT; y += 4) {
+    ctx.fillRect(0, y, WIDTH, 1);
+  }
+
+  ctx.restore();
+}
+
+function drawNoiseBars(ctx, themeColor) {
+  ctx.save();
+  const rgb = hexToRgb(themeColor);
+  ctx.globalAlpha = 0.16;
+
+  for (let i = 0; i < 36; i += 1) {
+    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${0.15 + Math.random() * 0.22})`;
+    ctx.fillRect(
+      Math.random() * WIDTH,
+      Math.random() * HEIGHT,
+      20 + Math.random() * 48,
+      2 + Math.random() * 5
+    );
+  }
+
+  ctx.restore();
+}
+
+function drawTextLines(ctx, lines, x, y, lineHeight, maxLines) {
+  for (let i = 0; i < Math.min(lines.length, maxLines); i += 1) {
+    ctx.fillText(lines[i], x, y + i * lineHeight);
+  }
+}
+
+function drawEndDisplay(data) {
+  if (data.endTimeText) {
+    return `${data.endDateText || data.startDateText} ${data.endTimeText}`;
+  }
+
+  if (data.endDateText) {
+    return data.endDateText;
+  }
+
+  return '-';
+}
+
+export async function renderEventCard(data) {
+  await ensureAsset(BG_PATH);
+  await ensureAsset(FRAME_PATH);
+
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext('2d');
+
+  const bg = await loadImage(BG_PATH);
+  const frame = await loadImage(FRAME_PATH);
+
+  const themeColor = getThemeColor(data.theme);
+  const rgb = hexToRgb(themeColor);
+
+  const thumbnailImage = await tryLoadAttachmentImage(data.thumbnail);
+  const bannerImage = await tryLoadAttachmentImage(data.image);
+
+  // 1. Background
+  ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+
+  // 2. Darken and tint
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)`;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  drawScanlines(ctx);
+  drawNoiseBars(ctx, themeColor);
+
+  // 3. Frame/card art before content
+  ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
+
+  // Layout regions
+  const left = 96;
+  const top = 92;
+  const rightColumnW = thumbnailImage ? 250 : 0;
+  const gap = thumbnailImage ? 28 : 0;
+  const mainW = WIDTH - 192 - rightColumnW - gap;
+
+  const thumbX = left + mainW + gap;
+  const thumbY = 118;
+  const thumbW = rightColumnW;
+  const thumbH = 214;
+
+  const bannerX = left;
+  const bannerY = 520;
+  const bannerW = mainW;
+  const bannerH = 88;
+
+  // 4. Images before text
+  if (thumbnailImage) {
+    drawContainImage(
+      ctx,
+      thumbnailImage,
+      thumbX + 12,
+      thumbY + 12,
+      thumbW - 24,
+      thumbH - 24,
+      10,
+      'rgba(0,0,0,0.28)'
+    );
+  }
+
+  if (bannerImage) {
+    drawContainImage(
+      ctx,
+      bannerImage,
+      bannerX + 8,
+      bannerY + 8,
+      bannerW - 16,
+      bannerH - 16,
+      10,
+      'rgba(0,0,0,0.28)'
+    );
+  }
+
+  // 5. Text last
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+
+  // Header
+  ctx.font = '500 16px monospace';
+  ctx.fillStyle = themeColor;
+  ctx.fillText('[ LIVE EVENT DOSSIER ]', left, 88);
+
+  // Title
+  const titleText = String(data.title || 'EVENT').toUpperCase();
+  const titleSize = fitText(ctx, titleText, mainW, 42, 600);
+  ctx.font = `600 ${titleSize}px sans-serif`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(titleText, left, 158);
+
+  // Description
+  ctx.font = '500 20px monospace';
+  ctx.fillStyle = '#D8D2EE';
+  const descLines = wrapText(ctx, data.description || '', mainW - 8);
+  drawTextLines(ctx, descLines, left, 212, 28, 3);
+
+  // Data labels
+  ctx.font = '500 17px monospace';
+  ctx.fillStyle = themeColor;
+  ctx.fillText('[ START DATE ]', left, 356);
+  ctx.fillText('[ START TIME ]', left + 230, 356);
+  ctx.fillText('[ END ]', left + 470, 356);
+
+  // Data values
+  ctx.font = '500 22px monospace';
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(data.startDateText || '-', left, 394);
+  ctx.fillText(data.startTimeText || '-', left + 230, 394);
+  ctx.fillText(drawEndDisplay(data), left + 470, 394);
+
+  // Secondary row
+  ctx.font = '500 17px monospace';
+  ctx.fillStyle = themeColor;
+  ctx.fillText('[ ZONE ]', left, 446);
+  ctx.fillText('[ VOICE ]', left + 230, 446);
+
+  ctx.font = '500 20px monospace';
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(data.timezone || 'UTC', left, 482);
+  ctx.fillText(data.voiceChannelName || 'Not specified', left + 230, 482);
+
+  // Footer
+  ctx.font = '500 15px monospace';
+  ctx.fillStyle = '#BEB7D4';
+  ctx.fillText('JUDGE // EVENT CARD // SIGNAL VERIFIED', left, 642);
+
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
+}
