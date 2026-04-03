@@ -11,12 +11,31 @@ function themeColor(theme) {
   return THEME_COLORS[theme] || THEME_COLORS.cyan;
 }
 
-function formatSchedule(payload) {
-  const start = `${payload.startDateText} ${payload.startTimeText}`;
-  const endDate = payload.endDateText || payload.startDateText;
+function formatDisplayDateTime(dateText, timeText) {
+  if (!dateText || !timeText) return '-';
 
-  if (payload.endTimeText) {
-    return `${start} → ${endDate} ${payload.endTimeText}${payload.timezone ? ` ${payload.timezone}` : ''}`;
+  const value = new Date(`${dateText}T${timeText}:00`);
+  if (Number.isNaN(value.getTime())) {
+    return `${dateText} ${timeText}`;
+  }
+
+  const month = value.toLocaleString('en-US', { month: 'short' });
+  const day = value.getDate();
+  const year = value.getFullYear();
+  const hour = value.toLocaleString('en-US', {
+    hour: 'numeric',
+    hour12: true
+  });
+
+  return `${month}, ${day}, ${year} at ${hour}`;
+}
+
+function formatSchedule(payload) {
+  const start = formatDisplayDateTime(payload.startDateText, payload.startTimeText);
+
+  if (payload.endDateText && payload.endTimeText) {
+    const end = formatDisplayDateTime(payload.endDateText, payload.endTimeText);
+    return `${start} → ${end}${payload.timezone ? ` ${payload.timezone}` : ''}`;
   }
 
   if (payload.endDateText && payload.endDateText !== payload.startDateText) {

@@ -2,8 +2,10 @@ import { AttachmentBuilder, ChannelType } from 'discord.js';
 import { eventEmbed } from '../embeds/eventEmbed.js';
 import {
   createEvent,
+  getEvent,
   getUpcomingEvents,
-  markReminderSent
+  markReminderSent,
+  updateEvent
 } from '../repositories/eventRepo.js';
 import {
   ensureGuildChannelConfig,
@@ -43,12 +45,31 @@ function isImageAttachment(attachment) {
   );
 }
 
-function formatEventTimeLabel(payload) {
-  const start = `${payload.startDateText} ${payload.startTimeText}`;
-  const endDate = payload.endDateText || payload.startDateText;
+function formatDisplayDateTime(dateText, timeText) {
+  if (!dateText || !timeText) return '-';
 
-  if (payload.endTimeText) {
-    return `${start} → ${endDate} ${payload.endTimeText}${payload.timezone ? ` ${payload.timezone}` : ''}`;
+  const value = new Date(`${dateText}T${timeText}:00`);
+  if (Number.isNaN(value.getTime())) {
+    return `${dateText} ${timeText}`;
+  }
+
+  const month = value.toLocaleString('en-US', { month: 'short' });
+  const day = value.getDate();
+  const year = value.getFullYear();
+  const hour = value.toLocaleString('en-US', {
+    hour: 'numeric',
+    hour12: true
+  });
+
+  return `${month}, ${day}, ${year} at ${hour}`;
+}
+
+function formatEventTimeLabel(payload) {
+  const start = formatDisplayDateTime(payload.startDateText, payload.startTimeText);
+
+  if (payload.endDateText && payload.endTimeText) {
+    const end = formatDisplayDateTime(payload.endDateText, payload.endTimeText);
+    return `${start} → ${end}${payload.timezone ? ` ${payload.timezone}` : ''}`;
   }
 
   if (payload.endDateText && payload.endDateText !== payload.startDateText) {
@@ -56,6 +77,17 @@ function formatEventTimeLabel(payload) {
   }
 
   return `${start}${payload.timezone ? ` ${payload.timezone}` : ''}`;
+}
+
+function parseDateTime(dateText, timeText) {
+  if (!dateText || !timeText) return null;
+
+  const value = new Date(`${dateText}T${timeText}:00`);
+  if (Number.isNaN(value.getTime())) {
+    throw new Error('Invalid event date/time.');
+  }
+
+  return value.toISOString();
 }
 
 async function sendEventMessage(channel, content, embedPayload, renderPayload) {
@@ -85,6 +117,34 @@ async function sendEventMessage(channel, content, embedPayload, renderPayload) {
   });
 
   return { message, usedImage: false };
+}
+
+async function editEventMessage(message, embedPayload, renderPayload) {
+  const embed = eventEmbed(embedPayload);
+  const imageBuffer = await tryRenderEventCard(renderPayload);
+
+  if (imageBuffer) {
+    try {
+      const file = new AttachmentBuilder(imageBuffer, { name: 'event-card.png' });
+      embed.setImage('attachment://event-card.png');
+
+      const updated = await message.edit({
+        embeds: [embed],
+        files: [file]
+      });
+
+      return { message: updated, usedImage: true };
+    } catch (error) {
+      console.error('Event edit with image failed, falling back to embed-only:', error);
+    }
+  }
+
+  const updated = await message.edit({
+    embeds: [embed],
+    files: []
+  });
+
+  return { message: updated, usedImage: false };
 }
 
 export async function postEvent(interaction, payload) {
@@ -201,6 +261,128 @@ export async function postEvent(interaction, payload) {
   };
 }
 
+export async function editEvent(interaction, eventId, patch) {
+  const existing = await getEvent(interaction.guildId, eventId);
+  if (!existing) {
+    throw new Error('Event not found.');
+  }
+
+  const startDateText = patch.startDateText ?? existing.startDateText;
+  const startTimeText = patch.startTimeText ?? existing.startTimeText;
+  const endDateText = patch.endDateText ?? existing.endDateText;
+  const endTimeText = patch.endTimeText ?? existing.endTimeText;
+
+  const startTimeIso = parseDateTime(startDateText, startTimeText);
+  const endTimeIso = endDateText && endTimeText
+    ? parseDateTime(endDateText, endTimeText)
+    : null;
+
+  const voiceChannelId =
+    patch.voiceChannel === undefined
+      ? existing.voiceChannelId
+      : (patch.voiceChannel?.id || null);
+
+  const voiceChannelName =
+    patch.voiceChannel === undefined
+      ? existing.voiceChannelName
+      : (patch.voiceChannel?.name || null);
+
+  const imageUrl =
+    patch.image === undefined
+      ? existing.imageUrl
+      : (isImageAttachment(patch.image) ? patch.image.url : null);
+
+  const thumbnailUrl =
+    patch.thumbnail === undefined
+      ? existing.thumbnailUrl
+      : (isImageAttachment(patch.thumbnail) ? patch.thumbnail.url : null);
+
+  const merged = {
+    ...existing,
+    title: patch.title ?? existing.title,
+    description: patch.description ?? existing.description,
+    startDateText,
+    startTimeText,
+    endDateText,
+    endTimeText,
+    timezone: patch.timezone ?? existing.timezone,
+    status: patch.status ?? existing.status,
+    theme: patch.theme ?? existing.theme,
+    voiceChannelId,
+    voiceChannelName,
+    imageUrl,
+    thumbnailUrl,
+    startTimeIso,
+    endTimeIso
+  };
+
+  const targetChannel = await interaction.guild.channels
+    .fetch(existing.targetChannelId)
+    .catch(() => null);
+
+  if (!targetChannel) {
+    throw new Error('The original event channel could not be found.');
+  }
+
+  if (
+    targetChannel.type !== ChannelType.GuildText &&
+    targetChannel.type !== ChannelType.GuildAnnouncement
+  ) {
+    throw new Error('The original event channel is not editable as a text channel.');
+  }
+
+  const originalMessage = await targetChannel.messages
+    .fetch(existing.discordMessageId)
+    .catch(() => null);
+
+  if (!originalMessage) {
+    throw new Error('The original event message could not be found.');
+  }
+
+  const renderPayload = {
+    ...merged,
+    image: patch.image === undefined
+      ? (existing.imageUrl ? { url: existing.imageUrl, contentType: 'image/png' } : null)
+      : (isImageAttachment(patch.image) ? patch.image : null),
+    thumbnail: patch.thumbnail === undefined
+      ? (existing.thumbnailUrl ? { url: existing.thumbnailUrl, contentType: 'image/png' } : null)
+      : (isImageAttachment(patch.thumbnail) ? patch.thumbnail : null)
+  };
+
+  const embedPayload = {
+    ...merged,
+    image: imageUrl,
+    thumbnail: thumbnailUrl,
+    eventTimeLabel: formatEventTimeLabel(merged)
+  };
+
+  const editResult = await editEventMessage(originalMessage, embedPayload, renderPayload);
+
+  await updateEvent(interaction.guildId, eventId, {
+    title: merged.title,
+    description: merged.description,
+    startDateText: merged.startDateText,
+    startTimeText: merged.startTimeText,
+    endDateText: merged.endDateText,
+    endTimeText: merged.endTimeText,
+    timezone: merged.timezone,
+    startTime: startTimeIso,
+    endTime: endTimeIso,
+    status: merged.status,
+    theme: merged.theme,
+    imageUrl,
+    thumbnailUrl,
+    voiceChannelId,
+    voiceChannelName,
+    usedImageCard: editResult.usedImage
+  });
+
+  return {
+    message: editResult.message,
+    usedImage: editResult.usedImage
+  };
+}
+
 export async function listUpcomingEventSummaries(guildId, max = 5) {
   const events = await getUpcomingEvents(guildId, max);
 
@@ -214,6 +396,10 @@ export async function listUpcomingEventSummaries(guildId, max = 5) {
       timezone: event.timezone
     })
   }));
+}
+
+export async function listUpcomingEvents(guildId, max = 5) {
+  return listUpcomingEventSummaries(guildId, max);
 }
 
 export async function buildReminderPayload(event, minutesBefore) {

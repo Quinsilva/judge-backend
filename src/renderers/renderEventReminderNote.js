@@ -56,19 +56,38 @@ function fitText(ctx, text, maxWidth, startSize, weight = 600, family = 'sans-se
   return size;
 }
 
-function formatReminderSchedule(data) {
-  const start = `${data.startDateText} ${data.startTimeText}`;
-  const endDate = data.endDateText || data.startDateText;
+function formatDisplayDateTime(dateText, timeText) {
+  if (!dateText || !timeText) return '-';
 
-  if (data.endTimeText) {
-    return `${start} → ${endDate} ${data.endTimeText}${data.timezone ? ` ${data.timezone}` : ''}`;
+  const value = new Date(`${dateText}T${timeText}:00`);
+  if (Number.isNaN(value.getTime())) {
+    return `${dateText} ${timeText}`;
+  }
+
+  const month = value.toLocaleString('en-US', { month: 'short' });
+  const day = value.getDate();
+  const year = value.getFullYear();
+  const hour = value.toLocaleString('en-US', {
+    hour: 'numeric',
+    hour12: true
+  });
+
+  return `${month}, ${day}, ${year} at ${hour}`;
+}
+
+function formatReminderSchedule(data) {
+  const start = formatDisplayDateTime(data.startDateText, data.startTimeText);
+
+  if (data.endDateText && data.endTimeText) {
+    const end = formatDisplayDateTime(data.endDateText, data.endTimeText);
+    return `${start} → ${end}`;
   }
 
   if (data.endDateText && data.endDateText !== data.startDateText) {
-    return `${start} → ${data.endDateText}${data.timezone ? ` ${data.timezone}` : ''}`;
+    return `${start} → ${data.endDateText}`;
   }
 
-  return `${start}${data.timezone ? ` ${data.timezone}` : ''}`;
+  return start;
 }
 
 function drawTextLines(ctx, lines, x, y, lineHeight, maxLines) {
@@ -86,10 +105,8 @@ export async function renderEventReminderNote(data) {
   const note = await loadImage(NOTE_PATH);
   const themeColor = getThemeColor(data.theme);
 
-  // Base transparent-styled note image
   ctx.drawImage(note, 0, 0, WIDTH, HEIGHT);
 
-  // Text last
   ctx.save();
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
@@ -98,47 +115,39 @@ export async function renderEventReminderNote(data) {
   ctx.shadowBlur = 0;
   ctx.shadowColor = 'transparent';
 
-  // Header
   ctx.font = '500 18px monospace';
   ctx.fillStyle = themeColor;
   ctx.fillText(`[ EVENT REMINDER // T-${data.minutesBefore} ]`, 88, 78);
 
-  // Title
   const titleText = String(data.title || 'EVENT').toUpperCase();
   const titleSize = fitText(ctx, titleText, 720, 36, 600);
   ctx.font = `600 ${titleSize}px sans-serif`;
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(titleText, 88, 138);
 
-  // Description
   ctx.font = '500 20px monospace';
   ctx.fillStyle = '#E7E2F1';
   const descLines = wrapText(ctx, data.description || '', 720);
   drawTextLines(ctx, descLines, 88, 182, 28, 3);
 
-  // Schedule label
   ctx.font = '500 18px monospace';
   ctx.fillStyle = themeColor;
   ctx.fillText('[ SCHEDULE ]', 88, 298);
 
-  // Schedule value
   ctx.font = '500 22px monospace';
   ctx.fillStyle = '#FFFFFF';
   const scheduleLines = wrapText(ctx, formatReminderSchedule(data), 720);
   drawTextLines(ctx, scheduleLines, 88, 336, 28, 2);
 
-  // Voice label
   ctx.font = '500 18px monospace';
   ctx.fillStyle = themeColor;
   ctx.fillText('[ VOICE ]', 88, 408);
 
-  // Voice value
   ctx.font = '500 22px monospace';
   ctx.fillStyle = '#FFFFFF';
   const voiceLines = wrapText(ctx, data.voiceChannelName || 'Not specified', 720);
   drawTextLines(ctx, voiceLines, 88, 446, 28, 2);
 
-  // Footer
   ctx.font = '500 15px monospace';
   ctx.fillStyle = '#C9C3DF';
   ctx.fillText('JUDGE // DIGITAL STICKY NOTE // REMINDER SIGNAL LIVE', 88, 494);

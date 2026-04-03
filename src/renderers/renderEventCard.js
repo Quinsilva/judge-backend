@@ -132,11 +132,9 @@ function drawScanlines(ctx) {
   ctx.save();
   ctx.globalAlpha = 0.08;
   ctx.fillStyle = '#FFFFFF';
-
   for (let y = 0; y < HEIGHT; y += 4) {
     ctx.fillRect(0, y, WIDTH, 1);
   }
-
   ctx.restore();
 }
 
@@ -164,16 +162,38 @@ function drawTextLines(ctx, lines, x, y, lineHeight, maxLines) {
   }
 }
 
-function drawEndDisplay(data) {
-  if (data.endTimeText) {
-    return `${data.endDateText || data.startDateText} ${data.endTimeText}`;
+function formatDisplayDateTime(dateText, timeText) {
+  if (!dateText || !timeText) return '-';
+
+  const value = new Date(`${dateText}T${timeText}:00`);
+  if (Number.isNaN(value.getTime())) {
+    return `${dateText} ${timeText}`;
   }
 
-  if (data.endDateText) {
-    return data.endDateText;
+  const month = value.toLocaleString('en-US', { month: 'short' });
+  const day = value.getDate();
+  const year = value.getFullYear();
+  const hour = value.toLocaleString('en-US', {
+    hour: 'numeric',
+    hour12: true
+  });
+
+  return `${month}, ${day}, ${year} at ${hour}`;
+}
+
+function formatEventRange(data) {
+  const start = formatDisplayDateTime(data.startDateText, data.startTimeText);
+
+  if (data.endDateText && data.endTimeText) {
+    const end = formatDisplayDateTime(data.endDateText, data.endTimeText);
+    return `${start} → ${end}`;
   }
 
-  return '-';
+  if (data.endDateText && data.endDateText !== data.startDateText) {
+    return `${start} → ${data.endDateText}`;
+  }
+
+  return start;
 }
 
 export async function renderEventCard(data) {
@@ -192,10 +212,8 @@ export async function renderEventCard(data) {
   const thumbnailImage = await tryLoadAttachmentImage(data.thumbnail);
   const bannerImage = await tryLoadAttachmentImage(data.image);
 
-  // 1. Background
   ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
-  // 2. Darken and tint
   ctx.fillStyle = 'rgba(0,0,0,0.72)';
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -205,12 +223,9 @@ export async function renderEventCard(data) {
   drawScanlines(ctx);
   drawNoiseBars(ctx, themeColor);
 
-  // 3. Frame/card art before content
   ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
 
-  // Layout regions
   const left = 96;
-  const top = 92;
   const rightColumnW = thumbnailImage ? 250 : 0;
   const gap = thumbnailImage ? 28 : 0;
   const mainW = WIDTH - 192 - rightColumnW - gap;
@@ -225,7 +240,6 @@ export async function renderEventCard(data) {
   const bannerW = mainW;
   const bannerH = 88;
 
-  // 4. Images before text
   if (thumbnailImage) {
     drawContainImage(
       ctx,
@@ -252,7 +266,6 @@ export async function renderEventCard(data) {
     );
   }
 
-  // 5. Text last
   ctx.save();
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
@@ -261,50 +274,35 @@ export async function renderEventCard(data) {
   ctx.shadowBlur = 0;
   ctx.shadowColor = 'transparent';
 
-  // Header
   ctx.font = '500 16px monospace';
   ctx.fillStyle = themeColor;
   ctx.fillText('[ LIVE EVENT DOSSIER ]', left, 88);
 
-  // Title
   const titleText = String(data.title || 'EVENT').toUpperCase();
   const titleSize = fitText(ctx, titleText, mainW, 42, 600);
   ctx.font = `600 ${titleSize}px sans-serif`;
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(titleText, left, 158);
 
-  // Description
   ctx.font = '500 20px monospace';
   ctx.fillStyle = '#D8D2EE';
   const descLines = wrapText(ctx, data.description || '', mainW - 8);
   drawTextLines(ctx, descLines, left, 212, 28, 3);
 
-  // Data labels
   ctx.font = '500 17px monospace';
   ctx.fillStyle = themeColor;
-  ctx.fillText('[ START DATE ]', left, 356);
-  ctx.fillText('[ START TIME ]', left + 230, 356);
-  ctx.fillText('[ END ]', left + 470, 356);
-
-  // Data values
-  ctx.font = '500 22px monospace';
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(data.startDateText || '-', left, 394);
-  ctx.fillText(data.startTimeText || '-', left + 230, 394);
-  ctx.fillText(drawEndDisplay(data), left + 470, 394);
-
-  // Secondary row
-  ctx.font = '500 17px monospace';
-  ctx.fillStyle = themeColor;
+  ctx.fillText('[ SCHEDULE ]', left, 356);
   ctx.fillText('[ ZONE ]', left, 446);
-  ctx.fillText('[ VOICE ]', left + 230, 446);
+  ctx.fillText('[ VOICE ]', left + 420, 446);
 
   ctx.font = '500 20px monospace';
   ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(data.timezone || 'UTC', left, 482);
-  ctx.fillText(data.voiceChannelName || 'Not specified', left + 230, 482);
+  const scheduleLines = wrapText(ctx, formatEventRange(data), mainW - 8);
+  drawTextLines(ctx, scheduleLines, left, 394, 26, 2);
 
-  // Footer
+  ctx.fillText(data.timezone || 'UTC', left, 482);
+  ctx.fillText(data.voiceChannelName || 'Not specified', left + 420, 482);
+
   ctx.font = '500 15px monospace';
   ctx.fillStyle = '#BEB7D4';
   ctx.fillText('JUDGE // EVENT CARD // SIGNAL VERIFIED', left, 642);
