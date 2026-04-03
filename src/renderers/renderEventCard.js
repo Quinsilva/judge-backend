@@ -38,16 +38,6 @@ function hexToRgb(hex) {
   };
 }
 
-function roundedRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-}
-
-function clipRoundedRect(ctx, x, y, w, h, r) {
-  roundedRect(ctx, x, y, w, h, r);
-  ctx.clip();
-}
-
 function wrapText(ctx, text, maxWidth) {
   const words = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
@@ -75,91 +65,6 @@ function fitText(ctx, text, maxWidth, startSize, weight = 600, family = 'sans-se
     size -= 2;
   }
   return size;
-}
-
-function drawContainImage(ctx, image, x, y, w, h, radius = 10, background = 'rgba(0,0,0,0.18)') {
-  ctx.save();
-  clipRoundedRect(ctx, x, y, w, h, radius);
-
-  ctx.fillStyle = background;
-  ctx.fillRect(x, y, w, h);
-
-  const imgRatio = image.width / image.height;
-  const boxRatio = w / h;
-
-  let drawW;
-  let drawH;
-  let drawX;
-  let drawY;
-
-  if (imgRatio > boxRatio) {
-    drawW = w;
-    drawH = drawW / imgRatio;
-    drawX = x;
-    drawY = y + (h - drawH) / 2;
-  } else {
-    drawH = h;
-    drawW = drawH * imgRatio;
-    drawX = x + (w - drawW) / 2;
-    drawY = y;
-  }
-
-  ctx.drawImage(image, drawX, drawY, drawW, drawH);
-  ctx.restore();
-}
-
-function isImageAttachment(attachment) {
-  return Boolean(
-    attachment &&
-      typeof attachment.url === 'string' &&
-      typeof attachment.contentType === 'string' &&
-      attachment.contentType.startsWith('image/')
-  );
-}
-
-async function tryLoadAttachmentImage(attachment) {
-  if (!isImageAttachment(attachment)) return null;
-
-  try {
-    return await loadImage(attachment.url);
-  } catch (error) {
-    console.error('Failed to load event renderer attachment:', error);
-    return null;
-  }
-}
-
-function drawScanlines(ctx) {
-  ctx.save();
-  ctx.globalAlpha = 0.08;
-  ctx.fillStyle = '#FFFFFF';
-  for (let y = 0; y < HEIGHT; y += 4) {
-    ctx.fillRect(0, y, WIDTH, 1);
-  }
-  ctx.restore();
-}
-
-function drawNoiseBars(ctx, themeColor) {
-  ctx.save();
-  const rgb = hexToRgb(themeColor);
-  ctx.globalAlpha = 0.16;
-
-  for (let i = 0; i < 36; i += 1) {
-    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${0.15 + Math.random() * 0.22})`;
-    ctx.fillRect(
-      Math.random() * WIDTH,
-      Math.random() * HEIGHT,
-      20 + Math.random() * 48,
-      2 + Math.random() * 5
-    );
-  }
-
-  ctx.restore();
-}
-
-function drawTextLines(ctx, lines, x, y, lineHeight, maxLines) {
-  for (let i = 0; i < Math.min(lines.length, maxLines); i += 1) {
-    ctx.fillText(lines[i], x, y + i * lineHeight);
-  }
 }
 
 function formatDisplayDateTime(dateText, timeText) {
@@ -196,6 +101,102 @@ function formatEventRange(data) {
   return start;
 }
 
+function drawScanlines(ctx) {
+  ctx.save();
+  try {
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#FFFFFF';
+    for (let y = 0; y < HEIGHT; y += 4) {
+      ctx.fillRect(0, y, WIDTH, 1);
+    }
+  } finally {
+    ctx.restore();
+  }
+}
+
+function drawNoiseBars(ctx, themeColor) {
+  const rgb = hexToRgb(themeColor);
+
+  ctx.save();
+  try {
+    ctx.globalAlpha = 0.16;
+
+    for (let i = 0; i < 36; i += 1) {
+      ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${0.15 + Math.random() * 0.22})`;
+      ctx.fillRect(
+        Math.random() * WIDTH,
+        Math.random() * HEIGHT,
+        20 + Math.random() * 48,
+        2 + Math.random() * 5
+      );
+    }
+  } finally {
+    ctx.restore();
+  }
+}
+
+function isImageAttachment(attachment) {
+  return Boolean(
+    attachment &&
+      typeof attachment.url === 'string' &&
+      typeof attachment.contentType === 'string' &&
+      attachment.contentType.startsWith('image/')
+  );
+}
+
+async function tryLoadAttachmentImage(attachment) {
+  if (!isImageAttachment(attachment)) return null;
+
+  try {
+    return await loadImage(attachment.url);
+  } catch (error) {
+    console.error('Failed to load event renderer attachment:', error);
+    return null;
+  }
+}
+
+function drawContainedImageSafe(ctx, image, x, y, w, h, radius = 10, background = 'rgba(0,0,0,0.18)') {
+  ctx.save();
+  try {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, radius);
+    ctx.clip();
+
+    ctx.fillStyle = background;
+    ctx.fillRect(x, y, w, h);
+
+    const imgRatio = image.width / image.height;
+    const boxRatio = w / h;
+
+    let drawW;
+    let drawH;
+    let drawX;
+    let drawY;
+
+    if (imgRatio > boxRatio) {
+      drawW = w;
+      drawH = drawW / imgRatio;
+      drawX = x;
+      drawY = y + (h - drawH) / 2;
+    } else {
+      drawH = h;
+      drawW = drawH * imgRatio;
+      drawX = x + (w - drawW) / 2;
+      drawY = y;
+    }
+
+    ctx.drawImage(image, drawX, drawY, drawW, drawH);
+  } finally {
+    ctx.restore();
+  }
+}
+
+function drawTextLines(ctx, lines, x, y, lineHeight, maxLines) {
+  for (let i = 0; i < Math.min(lines.length, maxLines); i += 1) {
+    ctx.fillText(lines[i], x, y + i * lineHeight);
+  }
+}
+
 export async function renderEventCard(data) {
   await ensureAsset(BG_PATH);
   await ensureAsset(FRAME_PATH);
@@ -212,19 +213,32 @@ export async function renderEventCard(data) {
   const thumbnailImage = await tryLoadAttachmentImage(data.thumbnail);
   const bannerImage = await tryLoadAttachmentImage(data.image);
 
-  ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
+  // Base layers
+  ctx.save();
+  try {
+    ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
-  ctx.fillStyle = 'rgba(0,0,0,0.72)';
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)`;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.08)`;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  } finally {
+    ctx.restore();
+  }
 
   drawScanlines(ctx);
   drawNoiseBars(ctx, themeColor);
 
-  ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
+  // Card art stays behind content
+  ctx.save();
+  try {
+    ctx.drawImage(frame, 0, 0, WIDTH, HEIGHT);
+  } finally {
+    ctx.restore();
+  }
 
+  // Layout
   const left = 96;
   const rightColumnW = thumbnailImage ? 250 : 0;
   const gap = thumbnailImage ? 28 : 0;
@@ -240,74 +254,86 @@ export async function renderEventCard(data) {
   const bannerW = mainW;
   const bannerH = 88;
 
+  // Image layers — each isolated
   if (thumbnailImage) {
-    drawContainImage(
-      ctx,
-      thumbnailImage,
-      thumbX + 12,
-      thumbY + 12,
-      thumbW - 24,
-      thumbH - 24,
-      10,
-      'rgba(0,0,0,0.28)'
-    );
+    try {
+      drawContainedImageSafe(
+        ctx,
+        thumbnailImage,
+        thumbX + 12,
+        thumbY + 12,
+        thumbW - 24,
+        thumbH - 24,
+        10,
+        'rgba(0,0,0,0.28)'
+      );
+    } catch (error) {
+      console.error('Failed to draw event thumbnail:', error);
+    }
   }
 
   if (bannerImage) {
-    drawContainImage(
-      ctx,
-      bannerImage,
-      bannerX + 8,
-      bannerY + 8,
-      bannerW - 16,
-      bannerH - 16,
-      10,
-      'rgba(0,0,0,0.28)'
-    );
+    try {
+      drawContainedImageSafe(
+        ctx,
+        bannerImage,
+        bannerX + 8,
+        bannerY + 8,
+        bannerW - 16,
+        bannerH - 16,
+        10,
+        'rgba(0,0,0,0.28)'
+      );
+    } catch (error) {
+      console.error('Failed to draw event banner:', error);
+    }
   }
 
+  // Final text pass — fully independent
   ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
+  try {
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
 
-  ctx.font = '500 16px monospace';
-  ctx.fillStyle = themeColor;
-  ctx.fillText('[ LIVE EVENT DOSSIER ]', left, 88);
+    ctx.font = '500 16px monospace';
+    ctx.fillStyle = themeColor;
+    ctx.fillText('[ LIVE EVENT DOSSIER ]', left, 88);
 
-  const titleText = String(data.title || 'EVENT').toUpperCase();
-  const titleSize = fitText(ctx, titleText, mainW, 42, 600);
-  ctx.font = `600 ${titleSize}px sans-serif`;
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(titleText, left, 158);
+    const titleText = String(data.title || 'EVENT').toUpperCase();
+    const titleSize = fitText(ctx, titleText, mainW, 42, 600);
+    ctx.font = `600 ${titleSize}px sans-serif`;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(titleText, left, 158);
 
-  ctx.font = '500 20px monospace';
-  ctx.fillStyle = '#D8D2EE';
-  const descLines = wrapText(ctx, data.description || '', mainW - 8);
-  drawTextLines(ctx, descLines, left, 212, 28, 3);
+    ctx.font = '500 20px monospace';
+    ctx.fillStyle = '#D8D2EE';
+    const descLines = wrapText(ctx, data.description || '', mainW - 8);
+    drawTextLines(ctx, descLines, left, 212, 28, 3);
 
-  ctx.font = '500 17px monospace';
-  ctx.fillStyle = themeColor;
-  ctx.fillText('[ SCHEDULE ]', left, 356);
-  ctx.fillText('[ ZONE ]', left, 446);
-  ctx.fillText('[ VOICE ]', left + 420, 446);
+    ctx.font = '500 17px monospace';
+    ctx.fillStyle = themeColor;
+    ctx.fillText('[ SCHEDULE ]', left, 356);
+    ctx.fillText('[ ZONE ]', left, 446);
+    ctx.fillText('[ VOICE ]', left + 420, 446);
 
-  ctx.font = '500 20px monospace';
-  ctx.fillStyle = '#FFFFFF';
-  const scheduleLines = wrapText(ctx, formatEventRange(data), mainW - 8);
-  drawTextLines(ctx, scheduleLines, left, 394, 26, 2);
+    ctx.font = '500 20px monospace';
+    ctx.fillStyle = '#FFFFFF';
+    const scheduleLines = wrapText(ctx, formatEventRange(data), mainW - 8);
+    drawTextLines(ctx, scheduleLines, left, 394, 26, 2);
 
-  ctx.fillText(data.timezone || 'UTC', left, 482);
-  ctx.fillText(data.voiceChannelName || 'Not specified', left + 420, 482);
+    ctx.fillText(data.timezone || 'UTC', left, 482);
+    ctx.fillText(data.voiceChannelName || 'Not specified', left + 420, 482);
 
-  ctx.font = '500 15px monospace';
-  ctx.fillStyle = '#BEB7D4';
-  ctx.fillText('JUDGE // EVENT CARD // SIGNAL VERIFIED', left, 642);
-
-  ctx.restore();
+    ctx.font = '500 15px monospace';
+    ctx.fillStyle = '#BEB7D4';
+    ctx.fillText('JUDGE // EVENT CARD // SIGNAL VERIFIED', left, 642);
+  } finally {
+    ctx.restore();
+  }
 
   return canvas.toBuffer('image/png');
 }
