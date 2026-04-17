@@ -167,7 +167,7 @@ export async function renderPlaytestCard(data) {
 
   ctx.font = '800 26px sans-serif';
   ctx.fillStyle = COLORS.yellow;
-  ctx.fillText('🧪 Focus Areas', left, focusY);
+  ctx.fillText('Focus Areas', left, focusY);
 
   const focusItems = String(data.focusAreas || '')
     .split(',')
@@ -192,7 +192,7 @@ export async function renderPlaytestCard(data) {
 
   ctx.font = '800 24px sans-serif';
   ctx.fillStyle = COLORS.orange;
-  ctx.fillText('⏱ Testing Window', left, windowY);
+  ctx.fillText('Testing Window', left, windowY);
 
   ctx.font = '500 22px sans-serif';
   ctx.fillStyle = COLORS.white;
@@ -211,7 +211,7 @@ export async function renderPlaytestCard(data) {
 
   ctx.font = '800 24px sans-serif';
   ctx.fillStyle = COLORS.cyan;
-  ctx.fillText('📝 Notes', left, notesY);
+  ctx.fillText('Notes', left, notesY);
 
   ctx.font = '500 22px sans-serif';
   ctx.fillStyle = COLORS.white;
