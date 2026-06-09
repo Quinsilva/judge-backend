@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { FONT_FAMILY } from './fontSetup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +32,7 @@ async function ensureAsset(filePath) {
 function fitText(ctx, text, maxWidth, startSize) {
   let size = startSize;
   while (size > 16) {
-    ctx.font = `800 ${size}px sans-serif`;
+    ctx.font = `800 ${size}px ${FONT_FAMILY}`;
     if (ctx.measureText(text).width <= maxWidth) return size;
     size -= 2;
   }
@@ -75,11 +76,11 @@ function drawWrappedList(ctx, items, x, y, maxWidth, lineHeight, bulletColor, te
   const visible = items.slice(0, maxItems);
 
   for (const item of visible) {
-    ctx.font = '700 24px sans-serif';
+    ctx.font = `700 24px ${FONT_FAMILY}`;
     ctx.fillStyle = bulletColor;
     ctx.fillText('•', x, cursorY);
 
-    ctx.font = '500 22px sans-serif';
+    ctx.font = `500 22px ${FONT_FAMILY}`;
     ctx.fillStyle = textColor;
 
     const wrapped = wrapText(ctx, item, maxWidth - 28);
@@ -122,18 +123,18 @@ export async function renderPlaytestCard(data) {
   const title = `Playtest • ${data.buildVersion}`;
   const titleSize = fitText(ctx, title, 700, 40);
 
-  ctx.font = `800 ${titleSize}px sans-serif`;
+  ctx.font = `800 ${titleSize}px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.white;
   ctx.fillText('Playtest', left, top);
 
   const titleWidth = ctx.measureText('Playtest').width;
-  ctx.font = `700 ${Math.max(titleSize - 2, 20)}px sans-serif`;
+  ctx.font = `700 ${Math.max(titleSize - 2, 20)}px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.lime;
   ctx.fillText(` • ${data.buildVersion}`, left + titleWidth, top);
 
   // Focus chip
   const focusLabel = 'QA WINDOW';
-  ctx.font = '800 20px sans-serif';
+  ctx.font = `800 20px ${FONT_FAMILY}`;
   const chipPadX = 14;
   const chipW = ctx.measureText(focusLabel).width + chipPadX * 2;
   const chipH = 34;
@@ -165,7 +166,7 @@ export async function renderPlaytestCard(data) {
   const focusY = chipY + chipH + 42;
   drawPanel(ctx, left - 10, focusY - 28, contentWidth, 140);
 
-  ctx.font = '800 26px sans-serif';
+  ctx.font = `800 26px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.yellow;
   ctx.fillText('Focus Areas', left, focusY);
 
@@ -190,11 +191,11 @@ export async function renderPlaytestCard(data) {
   const windowY = Math.max(nextY + 12, focusY + 125);
   drawPanel(ctx, left - 10, windowY - 28, contentWidth, 100);
 
-  ctx.font = '800 24px sans-serif';
+  ctx.font = `800 24px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.orange;
   ctx.fillText('Testing Window', left, windowY);
 
-  ctx.font = '500 22px sans-serif';
+  ctx.font = `500 22px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.white;
   const windowLines = wrapText(
     ctx,
@@ -209,11 +210,11 @@ export async function renderPlaytestCard(data) {
   const notesY = windowY + 110;
   drawPanel(ctx, left - 10, notesY - 28, contentWidth, 120);
 
-  ctx.font = '800 24px sans-serif';
+  ctx.font = `800 24px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.cyan;
   ctx.fillText('Notes', left, notesY);
 
-  ctx.font = '500 22px sans-serif';
+  ctx.font = `500 22px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.white;
   const notesLines = wrapText(
     ctx,
@@ -224,7 +225,7 @@ export async function renderPlaytestCard(data) {
     ctx.fillText(line, left + 4, notesY + 34 + index * 28);
   });
 
-  ctx.font = '600 18px sans-serif';
+  ctx.font = `600 18px ${FONT_FAMILY}`;
   ctx.fillStyle = COLORS.soft;
   ctx.fillText('UR-Judge System', WIDTH - 210, HEIGHT - 28);
 

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { FONT_FAMILY, MONO_FAMILY } from './fontSetup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,7 +47,7 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-function fitText(ctx, text, maxWidth, startSize, weight = 600, family = 'sans-serif') {
+function fitText(ctx, text, maxWidth, startSize, weight = 600, family = FONT_FAMILY) {
   let size = startSize;
   while (size > 16) {
     ctx.font = `${weight} ${size}px ${family}`;
@@ -115,40 +116,40 @@ export async function renderEventReminderNote(data) {
   ctx.shadowBlur = 0;
   ctx.shadowColor = 'transparent';
 
-  ctx.font = '500 18px monospace';
+  ctx.font = `500 18px ${MONO_FAMILY}`;
   ctx.fillStyle = themeColor;
   ctx.fillText(`[ EVENT REMINDER // T-${data.minutesBefore} ]`, 88, 78);
 
   const titleText = String(data.title || 'EVENT').toUpperCase();
   const titleSize = fitText(ctx, titleText, 720, 36, 600);
-  ctx.font = `600 ${titleSize}px sans-serif`;
+  ctx.font = `600 ${titleSize}px ${FONT_FAMILY}`;
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(titleText, 88, 138);
 
-  ctx.font = '500 20px monospace';
+  ctx.font = `500 20px ${MONO_FAMILY}`;
   ctx.fillStyle = '#E7E2F1';
   const descLines = wrapText(ctx, data.description || '', 720);
   drawTextLines(ctx, descLines, 88, 182, 28, 3);
 
-  ctx.font = '500 18px monospace';
+  ctx.font = `500 18px ${MONO_FAMILY}`;
   ctx.fillStyle = themeColor;
   ctx.fillText('[ SCHEDULE ]', 88, 298);
 
-  ctx.font = '500 22px monospace';
+  ctx.font = `500 22px ${MONO_FAMILY}`;
   ctx.fillStyle = '#FFFFFF';
   const scheduleLines = wrapText(ctx, formatReminderSchedule(data), 720);
   drawTextLines(ctx, scheduleLines, 88, 336, 28, 2);
 
-  ctx.font = '500 18px monospace';
+  ctx.font = `500 18px ${MONO_FAMILY}`;
   ctx.fillStyle = themeColor;
   ctx.fillText('[ VOICE ]', 88, 408);
 
-  ctx.font = '500 22px monospace';
+  ctx.font = `500 22px ${MONO_FAMILY}`;
   ctx.fillStyle = '#FFFFFF';
   const voiceLines = wrapText(ctx, data.voiceChannelName || 'Not specified', 720);
   drawTextLines(ctx, voiceLines, 88, 446, 28, 2);
 
-  ctx.font = '500 15px monospace';
+  ctx.font = `500 15px ${MONO_FAMILY}`;
   ctx.fillStyle = '#C9C3DF';
   ctx.fillText('JUDGE // DIGITAL STICKY NOTE // REMINDER SIGNAL LIVE', 88, 494);
 

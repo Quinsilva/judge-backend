@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { FONT_FAMILY, MONO_FAMILY } from './fontSetup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,7 +48,7 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-function fitText(ctx, text, maxWidth, startSize, family = 'sans-serif') {
+function fitText(ctx, text, maxWidth, startSize, family = FONT_FAMILY) {
   let size = startSize;
   while (size > 16) {
     ctx.font = `600 ${size}px ${family}`;
@@ -295,7 +296,7 @@ export async function renderAnnouncementCard(data) {
 
     beginTextLayer(ctx);
     const titleSize = fitText(ctx, titleText, mainW, 48);
-    ctx.font = `600 ${titleSize}px sans-serif`;
+    ctx.font = `600 ${titleSize}px ${FONT_FAMILY}`;
     ctx.fillStyle = themeColor;
     ctx.fillText(titleText, left, titleY);
     endTextLayer(ctx);
@@ -303,25 +304,25 @@ export async function renderAnnouncementCard(data) {
   ctx.restore(); // Restore the context after drawing
 
   beginTextLayer(ctx);
-  ctx.font = '500 18px monospace';
+  ctx.font = `500 18px ${MONO_FAMILY}`;
   ctx.fillStyle = '#D5D2E8';
   ctx.fillText('[ PACKET STATUS: RECOVERED ]', left, statusY);
   endTextLayer(ctx);
 
   beginTextLayer(ctx);
-  ctx.font = '500 21px monospace';
+  ctx.font = `500 21px ${MONO_FAMILY}`;
   const summaryLines = wrapText(ctx, data.summary || '', mainW - 28);
   drawTextBlock(ctx, summaryLines, left + 10, summaryPanelY + 34, 26, '#FFFFFF', 3);
   endTextLayer(ctx);
 
   beginTextLayer(ctx);
-  ctx.font = '500 18px monospace';
+  ctx.font = `500 18px ${MONO_FAMILY}`;
   ctx.fillStyle = '#AAA';
   ctx.fillText('[ ARCHIVE LOG ]', left + 10, bodyPanelY + 24);
   endTextLayer(ctx);
 
   beginTextLayer(ctx);
-  ctx.font = '500 20px monospace';
+  ctx.font = `500 20px ${MONO_FAMILY}`;
   const bodyLines = wrapText(ctx, data.body || '', mainW - 28);
   drawTextBlock(ctx, bodyLines, left + 10, bodyPanelY + 58, 25, '#FFFFFF', 5);
   endTextLayer(ctx);
@@ -330,13 +331,13 @@ export async function renderAnnouncementCard(data) {
     const linkY = bannerImage ? bannerPanelY + bannerPanelH + 26 : bodyPanelY + bodyPanelH + 26;
 
     beginTextLayer(ctx);
-    ctx.font = '500 18px monospace';
+    ctx.font = `500 18px ${MONO_FAMILY}`;
     ctx.fillStyle = themeColor;
     ctx.fillText('[ UPLINK ]', left, linkY);
     endTextLayer(ctx);
 
     beginTextLayer(ctx);
-    ctx.font = '500 17px monospace';
+    ctx.font = `500 17px ${MONO_FAMILY}`;
     const linkLines = wrapText(ctx, data.link, mainW - 8);
     drawTextBlock(ctx, linkLines, left, linkY + 26, 21, themeColor, 2);
     endTextLayer(ctx);
@@ -347,14 +348,14 @@ export async function renderAnnouncementCard(data) {
     const thumbY = summaryPanelY;
 
     beginTextLayer(ctx);
-    ctx.font = '500 14px monospace';
+    ctx.font = `500 14px ${MONO_FAMILY}`;
     ctx.fillStyle = themeColor;
     ctx.fillText('[ VISUAL ]', thumbX + 26, thumbY + 33);
     endTextLayer(ctx);
   }
 
   beginTextLayer(ctx);
-  ctx.font = '500 16px monospace';
+  ctx.font = `500 16px ${MONO_FAMILY}`;
   ctx.fillStyle = '#BBB';
   ctx.fillText('JUDGE // TRACE ACTIVE', left, HEIGHT - 30);
   endTextLayer(ctx);
