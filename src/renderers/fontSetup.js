@@ -1,124 +1,116 @@
 import { GlobalFonts } from '@napi-rs/canvas';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
- * @napi-rs/canvas uses Skia's font subsystem. Generic family names like
- * "sans-serif" and "monospace" do NOT auto-resolve on all platforms
- * (especially Linux slim containers like node:20-slim).
+ * Bundled-font registration for @napi-rs/canvas (Skia).
  *
- * This module resolves a concrete font family at import time and exports
- * FONT_FAMILY / MONO_FAMILY constants for all renderers to use.
+ * WHY BUNDLED FONTS
+ *   Generic CSS family names like "sans-serif" / "monospace" do NOT
+ *   auto-resolve on all platforms (notably node:20-slim Linux images).
+ *   When that happens Skia silently renders ZERO glyphs — cards come out
+ *   with graphics but NO text. Bundling the TTFs in the repo guarantees
+ *   identical rendering on Windows, macOS, CI, and Docker with zero
+ *   dependence on which OS fonts happen to be installed.
  *
- * Priority order:
- *   1. Check if the generic name already resolves (nothing to do).
- *   2. Try to register a concrete system font under the generic alias.
- *   3. Fall back to a concrete family name that Skia already knows about.
+ * The DejaVu fonts are used because they are already the project default,
+ * freely redistributable, and have excellent glyph coverage
+ * (• ✦ ⚠ 📣 → box-drawing, etc.).
+ *
+ * Families registered:
+ *   "DejaVuSans"     <- DejaVuSans.ttf (400) + DejaVuSans-Bold.ttf (700)
+ *   "DejaVuSansMono" <- DejaVuSansMono.ttf (400) + DejaVuSansMono-Bold.ttf (700)
+ *
+ * NOTE: the alias has no spaces on purpose — renderers build font strings
+ * as `800 ${size}px ${FONT_FAMILY}` without quoting, which only works for
+ * single-token family names.
  */
 
-const SYSTEM_FONT_PATHS = [
-  // Windows
-  'C:\\Windows\\Fonts\\arial.ttf',
-  'C:\\Windows\\Fonts\\segoeui.ttf',
-  'C:\\Windows\\Fonts\\msyh.ttc',
-  // Linux (Debian/Ubuntu – matches Dockerfile fonts-dejavu-core)
-  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-  '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-  '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-  // macOS
-  '/System/Library/Fonts/Helvetica.ttc',
-  '/System/Library/Fonts/SFNSDisplay.ttf',
-  '/Library/Fonts/Arial.ttf',
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const FONT_DIR = path.join(__dirname, '..', 'assets', 'fonts');
+
+// Concrete alias names used by every renderer.
+export const FONT_FAMILY = 'DejaVuSans';
+export const MONO_FAMILY = 'DejaVuSansMono';
+
+// Bundled files: [path, alias] — regular + bold registered under one alias
+// so Skia can select the bold face by font weight.
+const BUNDLED = [
+  ['DejaVuSans.ttf', FONT_FAMILY],
+  ['DejaVuSans-Bold.ttf', FONT_FAMILY],
+  ['DejaVuSansMono.ttf', MONO_FAMILY],
+  ['DejaVuSansMono-Bold.ttf', MONO_FAMILY],
 ];
 
-const PREFERRED_FAMILIES = ['Segoe UI', 'Arial', 'DejaVu Sans', 'Helvetica', 'Liberation Sans'];
-
-let _family = null;
-
-function resolve() {
-  // 1. Already available?
-  if (GlobalFonts.has('sans-serif')) {
-    return 'sans-serif';
-  }
-
-  // 2. Register a system font under "sans-serif"
-  for (const fontPath of SYSTEM_FONT_PATHS) {
-    try {
-      if (fs.existsSync(fontPath)) {
-        const ok = GlobalFonts.registerFromPath(fontPath, 'sans-serif');
-        if (ok) {
-          console.log(`[fontSetup] Registered "${fontPath}" as "sans-serif"`);
-          return 'sans-serif';
-        }
-      }
-    } catch {
-      // ignore per-file errors
-    }
-  }
-
-  // 3. Find a concrete family that Skia already knows
-  const families = GlobalFonts.families.map((f) => f.family);
-  for (const candidate of PREFERRED_FAMILIES) {
-    if (families.includes(candidate)) {
-      console.log(`[fontSetup] "sans-serif" unavailable — using "${candidate}"`);
-      return candidate;
-    }
-  }
-
-  // 4. Last resort: return generic and hope for the best
-  console.warn('[fontSetup] No suitable font found. Text may not render.');
-  return 'sans-serif';
-}
-
-_family = resolve();
-
-export const FONT_FAMILY = _family;
-
-// ── monospace resolution ──────────────────────────────────────────────
-const MONO_SYSTEM_PATHS = [
-  // Windows
+// System-path fallbacks, used ONLY if the bundled files are missing
+// (e.g. the repo was cloned without LFS / fonts dir stripped).
+const SANS_FALLBACK = [
+  'C:\\Windows\\Fonts\\arial.ttf',
+  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+  '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+  '/System/Library/Fonts/Helvetica.ttc',
+];
+const MONO_FALLBACK = [
   'C:\\Windows\\Fonts\\consola.ttf',
-  'C:\\Windows\\Fonts\\cour.ttf',
-  // Linux (Debian/Ubuntu)
   '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
   '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
-  // macOS
-  '/System/Library/Fonts/SFNSMono.ttf',
   '/System/Library/Fonts/Menlo.ttc',
-  '/Library/Fonts/Courier New.ttf',
 ];
 
-const PREFERRED_MONO = ['Consolas', 'Courier New', 'DejaVu Sans Mono', 'Liberation Mono', 'Menlo'];
+let _registered = false;
 
-function resolveMono() {
-  if (GlobalFonts.has('monospace')) {
-    return 'monospace';
-  }
-
-  for (const fontPath of MONO_SYSTEM_PATHS) {
-    try {
-      if (fs.existsSync(fontPath)) {
-        const ok = GlobalFonts.registerFromPath(fontPath, 'monospace');
-        if (ok) {
-          console.log(`[fontSetup] Registered "${fontPath}" as "monospace"`);
-          return 'monospace';
-        }
-      }
-    } catch {
-      // ignore
+function registerOne(fontPath, alias) {
+  try {
+    if (!fs.existsSync(fontPath)) return false;
+    const ok = GlobalFonts.registerFromPath(fontPath, alias);
+    if (ok) {
+      console.log(`[fontSetup] Registered "${path.basename(fontPath)}" as "${alias}"`);
+      return true;
     }
+  } catch {
+    // ignore per-file errors
   }
-
-  const families = GlobalFonts.families.map((f) => f.family);
-  for (const candidate of PREFERRED_MONO) {
-    if (families.includes(candidate)) {
-      console.log(`[fontSetup] "monospace" unavailable — using "${candidate}"`);
-      return candidate;
-    }
-  }
-
-  console.warn('[fontSetup] No suitable monospace font found.');
-  return 'monospace';
+  return false;
 }
 
-export const MONO_FAMILY = resolveMono();
+function registerAll() {
+  if (_registered) return;
+  _registered = true;
+
+  // 1. Bundled fonts (primary, deterministic across all environments)
+  let sansOk = false;
+  let monoOk = false;
+  for (const [file, alias] of BUNDLED) {
+    if (registerOne(path.join(FONT_DIR, file), alias)) {
+      if (alias === FONT_FAMILY) sansOk = true;
+      if (alias === MONO_FAMILY) monoOk = true;
+    }
+  }
+
+  // 2. System-path fallback if a bundled family is incomplete
+  if (!sansOk) {
+    console.warn('[fontSetup] Bundled sans font missing — trying system fallback.');
+    for (const p of SANS_FALLBACK) {
+      if (registerOne(p, FONT_FAMILY)) break;
+    }
+  }
+  if (!monoOk) {
+    console.warn('[fontSetup] Bundled mono font missing — trying system fallback.');
+    for (const p of MONO_FALLBACK) {
+      if (registerOne(p, MONO_FAMILY)) break;
+    }
+  }
+
+  if (!GlobalFonts.has(FONT_FAMILY)) {
+    console.error(`[fontSetup] FATAL: "${FONT_FAMILY}" did not register. Text will NOT render.`);
+  }
+  if (!GlobalFonts.has(MONO_FAMILY)) {
+    console.error(`[fontSetup] FATAL: "${MONO_FAMILY}" did not register. Text will NOT render.`);
+  }
+}
+
+// Register synchronously at import time so FONT_FAMILY/MONO_FAMILY are
+// immediately usable by any renderer that imports this module.
+registerAll();

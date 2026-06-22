@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
+import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { FONT_FAMILY, MONO_FAMILY } from './fontSetup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,52 +21,8 @@ const THEME_COLORS = {
   purple: '#B29CFF'
 };
 
-// Candidate system font paths — first match wins
-const SANS_CANDIDATES = [
-  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-  '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-  '/System/Library/Fonts/Helvetica.ttc',
-  'C:\\Windows\\Fonts\\arial.ttf'
-];
-
-const SANS_BOLD_CANDIDATES = [
-  '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-  '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-  '/System/Library/Fonts/Helvetica.ttc',
-  'C:\\Windows\\Fonts\\arialbd.ttf'
-];
-
-const MONO_CANDIDATES = [
-  '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
-  '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
-  '/System/Library/Fonts/Menlo.ttc',
-  'C:\\Windows\\Fonts\\cour.ttf'
-];
-
-let fontsRegistered = false;
-
-async function registerFonts() {
-  if (fontsRegistered) return;
-  fontsRegistered = true;
-
-  async function tryRegister(candidates, family) {
-    for (const candidate of candidates) {
-      try {
-        await fs.access(candidate);
-        GlobalFonts.registerFromPath(candidate, family);
-        return true;
-      } catch {
-        // not found, try next
-      }
-    }
-    console.warn(`[renderEventCard] Could not find a font for family "${family}". Text may not render.`);
-    return false;
-  }
-
-  await tryRegister(SANS_CANDIDATES, 'CardSans');
-  await tryRegister(SANS_BOLD_CANDIDATES, 'CardSansBold');
-  await tryRegister(MONO_CANDIDATES, 'CardMono');
-}
+// Fonts are registered once via fontSetup.js (bundled DejaVu).
+// FONT_FAMILY (sans) and MONO_FAMILY (mono) are imported at the top.
 
 function getThemeColor(theme) {
   return THEME_COLORS[theme] || THEME_COLORS.cyan;
@@ -104,7 +61,7 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-function fitText(ctx, text, maxWidth, startSize, weight = 600, family = 'CardSansBold') {
+function fitText(ctx, text, maxWidth, startSize, weight = 600, family = FONT_FAMILY) {
   let size = startSize;
   while (size > 16) {
     ctx.font = `${weight} ${size}px "${family}"`;
@@ -245,8 +202,6 @@ function drawTextLines(ctx, lines, x, y, lineHeight, maxLines) {
 }
 
 export async function renderEventCard(data) {
-  // Register fonts before any canvas operations
-  await registerFonts();
 
   await ensureAsset(BG_PATH);
   await ensureAsset(FRAME_PATH);
@@ -350,32 +305,32 @@ export async function renderEventCard(data) {
     ctx.shadowColor = 'transparent';
 
     // Header label
-    ctx.font = '500 16px "CardMono"';
+    ctx.font = `500 16px ${MONO_FAMILY}`;
     ctx.fillStyle = themeColor;
     ctx.fillText('[ LIVE EVENT DOSSIER ]', left, 88);
 
     // Title — fit to available width using bold font
     const titleText = String(data.title || 'EVENT').toUpperCase();
-    const titleSize = fitText(ctx, titleText, mainW, 42, 600, 'CardSansBold');
-    ctx.font = `600 ${titleSize}px "CardSansBold"`;
+    const titleSize = fitText(ctx, titleText, mainW, 42, 600, FONT_FAMILY);
+    ctx.font = `600 ${titleSize}px ${FONT_FAMILY}`;
     ctx.fillStyle = '#FFFFFF';
     ctx.fillText(titleText, left, 158);
 
     // Description
-    ctx.font = '500 20px "CardMono"';
+    ctx.font = `500 20px ${MONO_FAMILY}`;
     ctx.fillStyle = '#D8D2EE';
     const descLines = wrapText(ctx, data.description || '', mainW - 8);
     drawTextLines(ctx, descLines, left, 212, 28, 3);
 
     // Section labels
-    ctx.font = '500 17px "CardMono"';
+    ctx.font = `500 17px ${MONO_FAMILY}`;
     ctx.fillStyle = themeColor;
     ctx.fillText('[ SCHEDULE ]', left, 356);
     ctx.fillText('[ ZONE ]', left, 446);
     ctx.fillText('[ VOICE ]', left + 420, 446);
 
     // Section values
-    ctx.font = '500 20px "CardMono"';
+    ctx.font = `500 20px ${MONO_FAMILY}`;
     ctx.fillStyle = '#FFFFFF';
     const scheduleLines = wrapText(ctx, formatEventRange(data), mainW - 8);
     drawTextLines(ctx, scheduleLines, left, 394, 26, 2);
@@ -384,7 +339,7 @@ export async function renderEventCard(data) {
     ctx.fillText(data.voiceChannelName || 'Not specified', left + 420, 482);
 
     // Footer
-    ctx.font = '500 15px "CardMono"';
+    ctx.font = `500 15px ${MONO_FAMILY}`;
     ctx.fillStyle = '#BEB7D4';
     ctx.fillText('JUDGE // EVENT CARD // SIGNAL VERIFIED', left, 642);
   } finally {
